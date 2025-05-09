@@ -128,6 +128,7 @@ p1
 
 ggsave('output/TDS vs conductivity.png', p1, height = 6, width  = 8)
 
+# are they correlated?
 cor.test(df1$Conductivity, df1$TDS, method = "spearman")
 
 cor.test(df1$Conductivity, df1$TDS, method = "kendall")
