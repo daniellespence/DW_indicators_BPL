@@ -97,4 +97,8 @@ Instructions to Replicators
 
 `install.packages("pacman", "tidyverse", "mgcv", "gratia", "dplyr", "ggplot2", "cowplot", 'patchwork')`
 
-- Prepare the data using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data cleaning.
+- Prepare the data using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data cleaning
+- Run time series GAMs using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Time series
+- Run each GAM using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code
+- See how model fit was selected in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Model selection
+- Create all figures used in main paper (and some from supporting information) in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Figures
