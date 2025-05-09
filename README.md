@@ -40,7 +40,7 @@ Licence: Open Government Licence - Canada
 
 Data were provided by the Buffalo Pound Water Treatment Plant.
 
-Data were prepared using scripts available at https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data Cleaning
+Data were prepared using scripts available at https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data%20Cleaning
 
 Datafiles used for each GAM were specific to the treatability indicator (to maximize observations of each):  
 - `bpgamdataCLEAN_Conductivity.csv`
@@ -97,8 +97,8 @@ Instructions to Replicators
 
 `install.packages("pacman", "tidyverse", "mgcv", "gratia", "dplyr", "ggplot2", "cowplot", 'patchwork')`
 
-- Prepare the data using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data Cleaning
-- Run time series GAMs using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Time series
+- Prepare the data using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Data%20Cleaning
+- Run time series GAMs using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Time%20series
 - Run each GAM using scripts in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code
-- See how model fit was selected in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Model selection
+- See how model fit was selected in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Model%20selection
 - Create all figures used in main paper (and some from supporting information) in https://github.com/daniellespence/DW_indicators_BPL/tree/main/Code/Figures
