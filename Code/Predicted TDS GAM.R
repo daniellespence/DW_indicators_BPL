@@ -119,34 +119,8 @@ df1 <- df1 %>%
 
 
 ##----------------------------------------------------------------------------##
-## 3. Check trends, distributions, correlations
+## 3. Estimate annual and seasonal variability
 ##----------------------------------------------------------------------------##
-
-# basic plot
-# 
-# df1 %>%
-#   ggplot(aes(x = year, y = Conductivity)) +
-#   geom_line()+
-#   ggtitle("Conductivity")
-# 
-# df1 %>%
-#   dplyr::select(Conductivity, SRP,  W_temp,  DIN, pH) %>%
-#   gather() %>%
-#   ggplot(aes(value)) +
-#   facet_wrap(~ key, scales = "free") +
-#   geom_histogram()
-# 
-# # assess correlations
-# 
-# dfx<-df1%>%
-#   select(Conductivity, SRP, TP, DIN, QLD,W_temp, SO4, PDO_3MON_AVG, SOI_3MON_AVG)
-# ## visualize correlations
-# p<- ggpairs(dfx[])  # can see that Conductivity and Conductivity, temperature, Org_N and TP are correlated. Ammonia and conductivity are not. (NH3, NO3, and TP correlated; TP and temp). Org N and TP are similarly correlated with Conductivity (0.640 and 0.667, respectively)
-# p 
-# 
-# 
-# ggsave('output/Conductivity Correlations.png', p, height = 8, width  = 10)
-# 
 
 df_clean <- df1 %>%
   ungroup() %>%                    # Remove any previous grouping
@@ -200,8 +174,7 @@ summary(m2)
 sink()
 
 
-summary(m2) # Deviance explained =74%, REML = 4555, r2 = 0.712, n=865
-# all significant 
+summary(m2) 
 
 
 k.check(m2)# k-index looks good 
@@ -209,7 +182,6 @@ k.check(m2)# k-index looks good
 p1<- draw(m2,  residuals = TRUE)& theme_bw() 
 p1
 
-#ggsave('output/Conductivity GAM 1990 on TN TP.png', p1, height = 10, width  = 10)
 
 ##----------------------------------------------------------------------------##
 ## 6. Assess model fit & autocorrelation
@@ -234,19 +206,7 @@ layout(1)
 ## 7. Plotting on the response scale/fitted values
 ##----------------------------------------------------------------------------##
 
-# how much does DOC vary on an annual basis?
 
-# Group by year and calculate variation metrics
-annual_var <- aggregate(Predicted_TDS ~ year, data = df1, function(x) {
-  if (all(is.na(x))) return(NA)
-  max(x, na.rm = TRUE) - min(x, na.rm = TRUE)
-})
-
-mean(annual_var$Predicted_TDS)
-
-min(df1$Predicted_TDS)
-#The average range in DOC concentration each year is 187 mg/L
-# (ranges between 198 and 810)
 
 ## ---------- DIN -------------------##
 
@@ -439,9 +399,7 @@ new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_A
                                                PDO_3MON_AVG = seq(min(PDO_3MON_AVG), max(PDO_3MON_AVG), length = 200),
                                                SRP = median(SRP, na.rm=TRUE),
                                                DIN = median(DIN, na.rm=TRUE),
-                                               #W_temp = median(W_temp, na.rm=TRUE),
                                                QLD = median(QLD, na.rm=TRUE),
-                                               
                                                year= median(year),
                                                DOY = median(DOY)))
 

@@ -69,35 +69,8 @@ df1<- merge(df, clim, by="date")
 
 
 ##----------------------------------------------------------------------------##
-## 3. Check trends, distributions, correlations
+## 3. Estimate annual and seasonal variability
 ##----------------------------------------------------------------------------##
-
-# basic plot
-# 
-# df1 %>%
-#   ggplot(aes(x = year, y = turb)) +
-#   geom_line()+
-#   ggtitle("turb")
-# 
-# df1 %>%
-#   dplyr::select(turb, SRP,  W_temp,  DIN, pH) %>%
-#   gather() %>%
-#   ggplot(aes(value)) +
-#   facet_wrap(~ key, scales = "free") +
-#   geom_histogram()
-# 
-# # assess correlations
-# 
-# dfx<-df1%>%
-#   select(turb, SRP, TP, DIN, QLD,W_temp, SO4, PDO_3MON_AVG, SOI_3MON_AVG)
-# ## visualize correlations
-# p<- ggpairs(dfx[])  # can see that turb and turbidity, temperature, Org_N and TP are correlated. Ammonia and conductivity are not. (NH3, NO3, and TP correlated; TP and temp). Org N and TP are similarly correlated with turb (0.640 and 0.667, respectively)
-# p 
-# 
-# 
-# ggsave('output/turb Correlations.png', p, height = 8, width  = 10)
-# 
-
 
 df_clean <- df1 %>%
   ungroup() %>%                    # Remove any previous grouping
@@ -139,19 +112,18 @@ print(summary_stats)
 
 m2 <- gam(turb ~ s(TP) +  
              s(TN)+ 
-             #s(W_temp)+
              s(QLD)+
-            #ti(DOY, QLD, bs = c("cc", "tp"))+ 
              te(PDO_3MON_AVG,SOI_3MON_AVG)+
              te(year, DOY, bs = c("cr", "cc")),
             knots=list(DOY=c(0, 366.5)),
            select = TRUE,
            data = df1, method = "REML", family = Gamma(link = "log"))
 
- # saveRDS(m2, file = "modelturb_notemp.rds")
- # sink("model_summaryturb.txt")
- # summary(m2)
- # sink()  
+ saveRDS(m2, file = "modelturb.rds")
+ sink("model_summaryturb.txt")
+ summary(m2)
+ sink()
+ 
 summary(m2)
 
 k.check(m2)# k-index looks good 
@@ -184,28 +156,11 @@ layout(1)
 ## 7. Plotting on the response scale/fitted values
 ##----------------------------------------------------------------------------##
 
-# how much does DOC vary on an annual basis?
-
-# Group by year and calculate variation metrics
-# annual_var <- aggregate(turb ~ year, data = df1, function(x) {
-#   if (all(is.na(x))) return(NA)
-#   max(x, na.rm = TRUE) - min(x, na.rm = TRUE)
-# })
-# 
-# mean(annual_var$turb)
-# #14.75
-# 
-# min(df1$turb)
-# max(df1$turb)
-#The average range in DOC concentration each year is 14.75 mg/L
-# the range in concentration is 0.35 to 50.9
-
 ## ---------- DIN -------------------##
 
 
 new_data_din <- with(df1, expand.grid(DIN = seq(min(DIN), max(DIN),length = 200),
                                            SRP = median(SRP, na.rm=TRUE),
-                                           #W_temp = median(W_temp, na.rm=TRUE),
                                            QLD = median(QLD),
                                            SOI_3MON_AVG = median(SOI_3MON_AVG, na.rm=TRUE),
                                            PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
@@ -265,7 +220,6 @@ max(din.pdatnorm$Fitted)-min(din.pdatnorm$Fitted)
 
 new_data_srp <- with(df1, expand.grid(SRP = seq(min(SRP, na.rm = TRUE), max(SRP, na.rm = TRUE), length = 200),
                                      DIN = median(DIN),
-                                    #W_temp = median(W_temp, na.rm=TRUE),
                                      QLD = median(QLD),
                                      SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                      PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
@@ -334,7 +288,6 @@ max(SRP.pdatnorm$Fitted)-min(SRP.pdatnorm$Fitted)
 new_data_QLD <- with(df1, expand.grid(QLD = seq(min(QLD), max(QLD), length = 200),
                                       DIN = median(DIN),
                                       SRP = median(SRP, na.rm=TRUE),
-                                     # W_temp = median(W_temp, na.rm=TRUE),
                                       SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                       PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
                                       year= median(year),
@@ -407,16 +360,13 @@ new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_A
                                                PDO_3MON_AVG = seq(min(PDO_3MON_AVG), max(PDO_3MON_AVG), length = 200),
                                                SRP = median(SRP, na.rm=TRUE),
                                                DIN = median(DIN, na.rm=TRUE),
-                                               #W_temp = median(W_temp, na.rm=TRUE),
                                                QLD = median(QLD, na.rm=TRUE),
-                                               
                                                year= median(year),
                                                DOY = median(DOY)))
 
 SOI_3MON_AVG.pred <- predict(m2, newdata = new_data_SOI_3MON_AVG, type = "terms")
 
 whichCols <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred))
-#whichColsSE <- grep("SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$se.fit))
 
 new_data_SOI_3MON_AVG <- cbind(new_data_SOI_3MON_AVG, Fitted = SOI_3MON_AVG.pred[, whichCols])
 
@@ -479,7 +429,6 @@ new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200
                                        PDO_3MON_AVG = median(PDO_3MON_AVG),
                                        SRP = median(SRP, na.rm=TRUE),
                                        DIN = median(DIN, na.rm=TRUE),
-                                       W_temp = median(W_temp, na.rm=TRUE),
                                        QLD = median(QLD, na.rm=TRUE)))
 
 year.pred <- predict(m2, newdata = new_data_year, type = "terms")
@@ -523,421 +472,6 @@ comboplot_time
 
 
 saveRDS(comboplot_time, "time_TURB.rds")  # save the ggplot object
-
-
-
-### ------------SOI PDO ----------------#
-
-
-N <- 200
-simSOI <- c(-1, 0.3, 1.1)
-SOIgroup <- factor(rep(c('-1', '0.3', '1.1'), each=200))  # 7*300
-reptimes <- length(simSOI) #3
-preddf <- data.frame(PDO_3MON_AVG = rep(seq(min(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            max(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     SOI_3MON_AVG = rep(simSOI, each = N)) #300
-superN <- nrow(preddf)
-
-
-SOI.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP, na.rm=TRUE),
-                            DIN = median(DIN, na.rm=TRUE),
-                            #W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-SOI.pred <- predict(m2, newdata = SOI.pdat, type = "link")
-SOI.pdat <- cbind(SOI.pdat, SOI.pred)
-SOI.pdat$SOIgroup <- SOIgroup
-
-names(SOI.pdat)[which(names(SOI.pdat)=='SOI.pred')] <- 'Turbidity'
-
-# backtransform from tweedie distribution
-SOI.pdat$Turbidity<- exp(SOI.pdat$Turbidity)
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(SOI.pdat$PDO_3MON_AVG, SOI.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI.pdat$Turbidity[toofar] <- NA
-
-
-
-#reorder factors
-SOI.pdat$SOIgroup <- factor(SOI.pdat$SOIgroup, levels = c('-1', '0.3', '1.1'))
-
-SOIplot <- ggplot(SOI.pdat, aes(x = PDO_3MON_AVG, y = Turbidity, group= SOI_3MON_AVG, col=SOIgroup, 
-                                lty=SOIgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_y_continuous(limits=c(4.5, 10.5))+
-  scale_color_manual(name=expression(paste(bold('')~'      SOI')), values = c("red", "black", "blue"))+
-  scale_linetype_manual(name=expression(paste(bold('')~'      SOI')), values = c("solid", "solid","longdash")) +
-  xlab('PDO') + ylab('Turbidity (NTU)')+
-  theme(
-    axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) < 0, "blue",
-                                              ifelse(seq(-2.5, 2.5, by = 1) > 0.5, "red", "black")))
-  )
-
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-SOIplot
-
-
-saveRDS(SOIplot, "soi_TURB.rds")  # save the ggplot object
-
-
-## now slices for PDO
-N <- 200
-simPDO <- c(-1.5, 0, 1.6)
-PDOgroup <- factor(rep(c('-1.5', '0', '1.6'), each=200)) 
-
-reptimes <- length(simPDO) #3
-preddf <- data.frame(SOI_3MON_AVG = rep(seq(min(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            max(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     PDO_3MON_AVG = rep(simPDO, each = N)) #300
-superN <- nrow(preddf)
-
-
-PDO.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP, na.rm=TRUE),
-                            DIN = median(DIN, na.rm=TRUE),
-                            #W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-PDO.pred <- predict(m2, newdata = PDO.pdat, type = "link")
-PDO.pdat <- cbind(PDO.pdat, PDO.pred)
-PDO.pdat$PDOgroup <- PDOgroup
-
-names(PDO.pdat)[which(names(PDO.pdat)=='PDO.pred')] <- 'Turbidity'
-
-# backtransform from tweedie distribution
-PDO.pdat$Turbidity<- exp(PDO.pdat$Turbidity)
-
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(PDO.pdat$PDO_3MON_AVG, PDO.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-PDO.pdat$Turbidity[toofar] <- NA
-
-
-#reorder factors
-PDO.pdat$PDOgroup <- factor(PDO.pdat$PDOgroup, levels = c('-1.5', '0', '1.6'))
-
-PDOplot <- ggplot(PDO.pdat, aes(x = SOI_3MON_AVG, y = Turbidity, group= PDO_3MON_AVG, col=PDOgroup, 
-                                lty=PDOgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_y_continuous(limits=c(4.5, 10.5))+
-  scale_color_manual(name=expression(paste(bold('')~'      PDO')), values = c("blue", "black", "red"))+
-  scale_linetype_manual(name=expression(paste(bold('')~'      PDO')), values = c("solid", "solid","longdash")) +
-  xlab('SOI') + ylab('Turbidity (NTU)')+
-  theme(
-    axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) <  -0.5, "blue",
-                                              ifelse(seq(-2.5, 2.5, by = 1) > 0, "red", "black")))
-  )
-
-
-PDOplot
-
-
-saveRDS(PDOplot, "pdo_TURB.rds")  # save the ggplot object
-
-
-pdo_all<- plot_grid(PDOplot, SOIplot)
-pdo_all
-
-ggsave('output/PDO SOI separate infl TW.png', pdo_all, height = 6, width  = 8)
-
-## ---------- W_temp -------------------##
-# 
-# new_data_temp <- with(df1, expand.grid(W_temp = seq(min(W_temp, na.rm = TRUE), max(W_temp, na.rm = TRUE), length = 200),
-#                                      DIN = median(DIN),
-#                                      SRP = median(SRP, na.rm=TRUE),
-#                                      QLD = median(QLD),
-#                                      SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
-#                                      PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
-#                                      year= median(year),
-#                                      DOY = median(DOY)))
-# 
-# temp.pred <- predict(m2, newdata = new_data_temp, type = "terms", se.fit = TRUE)
-# 
-# whichCols <- grep("W_temp", colnames(temp.pred$fit))
-# whichColsSE <- grep("W_temp", colnames(temp.pred$se.fit))
-# new_data_temp <- cbind(new_data_temp, Fitted = temp.pred$fit[, whichCols], 
-#                        se.Fitted = temp.pred$se.fit[, whichColsSE])
-# limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
-# 
-# ## make into original limits
-# new_data_temp <- with(new_data_temp, transform(new_data_temp, Fittedplus = Fitted + se.Fitted))
-# new_data_temp <- with(new_data_temp, transform(new_data_temp, Fittedminus = Fitted - se.Fitted))
-# 
-# shifttemp <- attr(predict(m2, newdata = new_data_temp, type = "iterms"), "constant")
-# temp.pdatnorm <- new_data_temp
-# temp.pdatnorm <- with(temp.pdatnorm, transform(temp.pdatnorm, Fitted = Fitted + shifttemp, 
-#                                                Fittedplus = Fittedplus + shifttemp, 
-#                                                Fittedminus = Fittedminus + shifttemp))
-# 
-# temp.pdatnorm$Fitted<-exp(temp.pdatnorm$Fitted)
-# temp.pdatnorm$Fittedplus<-exp(temp.pdatnorm$Fittedplus)
-# temp.pdatnorm$Fittedminus<-exp(temp.pdatnorm$Fittedminus)
-# 
-# 
-# tempquants <- quantile(df1$W_temp, c(.05,.95), na.rm = TRUE)
-# 
-# tempplot <- ggplot(temp.pdatnorm, aes(x = W_temp, y = Fitted)) +
-#   papertheme +
-#   annotate("rect", xmin=tempquants[1], xmax=tempquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
-#   geom_line() +
-#   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
-#               alpha = 0.25, fill = '#165459B2') +  
-#    geom_rug(aes(x=W_temp), data = df1, stat = "identity", position = "identity", 
-#            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-#   xlab(expression(paste("Water temperature (" , degree*C,")"))) + ylab("Turbidity (NTU)")
-# 
-# #tempplot
-# 
-# 
-# saveRDS(tempplot, "temp_TURB_notemp.rds")
-# 
-# # range of control
-# max(temp.pdatnorm$Fitted)-min(temp.pdatnorm$Fitted)
-# # = 1.70
-
-
-## ==================================================================================
-## Testing effect (NOT RESPONSE) by time plots SOURCE CODE (Wilk et al. 2018)
-## ==================================================================================
-
-
-df1<- df1%>%
-  select(date, year, nMonth, DOY, turb, SRP, DIN, QLD, W_temp, SOI_3MON_AVG, PDO_3MON_AVG)
-df1<- na.exclude(df1)
-
-df1$date <- as.Date(df1$date)
-
-df1$seasons <- time2season(df1$date,                # Convert dates to seasons
-                          out.fmt = "seasons")
-
-testing1 <- predict(m2, type = 'terms')
-testing <- as.data.frame(testing1)
-
-tosum <- grep("DIN", colnames(testing))
-DINeffect <- rowSums(testing[tosum], na.rm = TRUE)
-testing <- testing[,-tosum]
-testing$DIN <- DINeffect
-
-
-names(testing) <- c("SRP", "W_temp", "QLD", "SOI_PDO", "time", "DIN")
-testing$Date <- df1$date 
-testing$Year <- df1$year
-testing$DOY <- df1$DOY
-testing$Month <- df1$nMonth
-testing$seasons <- df1$seasons
-
-testing$Month<- as.factor(testing$Month)
-testing$Year<- as.factor(testing$Year)
-
-peD <- ggplot(testing, aes(x = Year, y = DIN)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('seasons') +  
-  ylab("DIN effect") + xlab("Year")
-peD
-
-
-##--------SRP--------------##
-
-peS <- ggplot(testing, aes(x = Year, y = SRP)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Year') +  
- ylab("SRP Effect") + xlab("Year")
-peS
-
-
-##--------TEMP--------------##
-
-peT <- ggplot(testing, aes(x = Year, y = W_temp)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-        xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Year') +  
-  ylab("Temp Effect") + xlab("Year")
-peT
-
-
-##--------QLD--------------##
-peQ <- ggplot(testing, aes(x = Year, y = QLD)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-             xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Year') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("QLD Effect") + xlab("Year")
-
-peQ
-
-
-
-
-##--------SOI*PDO--------------##
-## soi 
-pesoi <- ggplot(testing, aes(x = Year, y = SOI_PDO)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Year') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("SOI*PDO Effect") + xlab("Year")
-
-pesoi
-
-
-
-
-p_allEFF<- plot_grid(  peD, peS, peT, peQ, pesoi, ncol = 2, align = "hv")
-p_allEFF
-
-ggsave('output/turb GAM_partial effects long-term ALL.png', p_allEFF, height = 12, width  = 12)
-
-
-
-
-
-## Plotting response to interactions of SOI*PDO at different index values
-
-N <- 100
-simSOI <- c(-1, 0.3, 1.1)
-SOIgroup <- factor(rep(c('-1', '0.3', '1.1'), each=100))  # 7*300
-reptimes <- length(simSOI) #3
-preddf <- data.frame(PDO_3MON_AVG = rep(seq(min(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            max(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     SOI_3MON_AVG = rep(simSOI, each = N)) #300
-superN <- nrow(preddf)
-
-
-SOI.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP),
-                            DIN = median(DIN, na.rm=TRUE),
-                            W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-SOI.pred <- predict(m2, newdata = SOI.pdat, type = "link")
-SOI.pdat <- cbind(SOI.pdat, SOI.pred)
-SOI.pdat$SOIgroup <- SOIgroup
-
-names(SOI.pdat)[which(names(SOI.pdat)=='SOI.pred')] <- 'turb'
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(SOI.pdat$PDO_3MON_AVG, SOI.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI.pdat$turb[toofar] <- NA
-
-# backtransform from tweedie distribution
-SOI.pdat$turb<- exp(SOI.pdat$turb)
-
-
-#reorder factors
-SOI.pdat$SOIgroup <- factor(SOI.pdat$SOIgroup, levels = c('-1', '0.3', '1.1'))
-
-SOIplot <- ggplot(SOI.pdat, aes(x = PDO_3MON_AVG, y = turb, group= SOI_3MON_AVG, col=SOIgroup, 
-                                lty=SOIgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_color_manual(name=expression(paste(bold('E')~'      SOI')), values = c("#5e3c99", "#b2abd2", "#e66101"))+
-  scale_linetype_manual(name=expression(paste(bold('E')~'      SOI')), values = c("solid", "solid","longdash")) +
-  xlab('PDO') + ylab('turb')
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-SOIplot
-
-
-## now slices for PDO
-N <- 100
-simPDO <- c(-1.5, 0, 1.6)
-PDOgroup <- factor(rep(c('-1.5', '0', '1.6'), each=100)) 
-
-reptimes <- length(simPDO) #3
-preddf <- data.frame(SOI_3MON_AVG = rep(seq(min(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            max(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     PDO_3MON_AVG = rep(simPDO, each = N)) #300
-superN <- nrow(preddf)
-
-
-PDO.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP),
-                            DIN = median(DIN, na.rm=TRUE),
-                            W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-PDO.pred <- predict(m2, newdata = PDO.pdat, type = "link")
-PDO.pdat <- cbind(PDO.pdat, PDO.pred)
-PDO.pdat$PDOgroup <- PDOgroup
-
-names(PDO.pdat)[which(names(PDO.pdat)=='PDO.pred')] <- 'turb'
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(PDO.pdat$PDO_3MON_AVG, PDO.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-PDO.pdat$turb[toofar] <- NA
-
-# backtransform from tweedie distribution
-PDO.pdat$turb<- exp(PDO.pdat$turb)
-
-#reorder factors
-PDO.pdat$PDOgroup <- factor(PDO.pdat$PDOgroup, levels = c('-1.5', '0', '1.6'))
-
-PDOplot <- ggplot(PDO.pdat, aes(x = SOI_3MON_AVG, y = turb, group= PDO_3MON_AVG, col=PDOgroup, 
-                                lty=PDOgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_color_manual(name=expression(paste(bold('E')~'      PDO')), values = c("#5e3c99", "#b2abd2", "#e66101"))+
-  scale_linetype_manual(name=expression(paste(bold('E')~'      PDO')), values = c("solid", "solid","longdash")) +
-  #scale_colour_brewer(name = "PDO", type = 'qual', palette = 'Dark2', direction=1) +
-  #geom_abline(slope = 0, intercept = meanpH, linetype="dotted") +
-  xlab('SOI') + ylab('turb')
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-PDOplot
-
-
-pdo_all<- plot_grid(PDOplot, SOIplot)
-pdo_all
-
-ggsave('output/PDO SOI separate infl TW Turbidity.png', pdo_all, height = 6, width  = 8)
 
 
 

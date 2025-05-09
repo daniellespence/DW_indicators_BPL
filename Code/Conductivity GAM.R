@@ -70,43 +70,12 @@ df1<- merge(df, clim, by="date")
 
 
 ##----------------------------------------------------------------------------##
-## 3. Check trends, distributions, correlations
-##----------------------------------------------------------------------------##
-
-# basic plot
-# 
-# df1 %>%
-#   ggplot(aes(x = year, y = Conductivity)) +
-#   geom_line()+
-#   ggtitle("Conductivity")
-# 
-# df1 %>%
-#   dplyr::select(Conductivity, SRP,  W_temp,  DIN, pH) %>%
-#   gather() %>%
-#   ggplot(aes(value)) +
-#   facet_wrap(~ key, scales = "free") +
-#   geom_histogram()
-# 
-# # assess correlations
-# 
-# dfx<-df1%>%
-#   select(Conductivity, SRP, TP, DIN, QLD,W_temp, SO4, PDO_3MON_AVG, SOI_3MON_AVG)
-# ## visualize correlations
-# p<- ggpairs(dfx[])  # can see that Conductivity and Conductivity, temperature, Org_N and TP are correlated. Ammonia and conductivity are not. (NH3, NO3, and TP correlated; TP and temp). Org N and TP are similarly correlated with Conductivity (0.640 and 0.667, respectively)
-# p 
-# 
-# 
-# ggsave('output/Conductivity Correlations.png', p, height = 8, width  = 10)
-# 
-
-##----------------------------------------------------------------------------##
 ## 5. Run the full model (see Fitting script)
 ##----------------------------------------------------------------------------##
 
 
 m2 <- gam(Conductivity ~ s(SRP) +  
              s(DIN)+ 
-            # s(W_temp)+
              s(QLD)+
              te(PDO_3MON_AVG,SOI_3MON_AVG)+
              te(year, DOY, bs = c("cr", "cc")),
@@ -121,8 +90,7 @@ sink()
 
 
 
-summary(m2) # Deviance explained =78%, REML = 4741, r2 = 0.751, n=848
-# all significant 
+summary(m2) 
 
 
 k.check(m2)# k-index looks good 
@@ -130,7 +98,6 @@ k.check(m2)# k-index looks good
 p1<- draw(m2,  residuals = TRUE)& theme_bw() 
 p1
 
-#ggsave('output/Conductivity GAM 1990 on TN TP.png', p1, height = 10, width  = 10)
 
 ##----------------------------------------------------------------------------##
 ## 6. Assess model fit & autocorrelation
@@ -375,7 +342,6 @@ new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_A
 SOI_3MON_AVG.pred <- predict(m2, newdata = new_data_SOI_3MON_AVG, type = "terms")
 
 whichCols <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred))
-#whichColsSE <- grep("SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$se.fit))
 
 new_data_SOI_3MON_AVG <- cbind(new_data_SOI_3MON_AVG, Fitted = SOI_3MON_AVG.pred[, whichCols])
 
@@ -441,7 +407,6 @@ new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200
                                        PDO_3MON_AVG = median(PDO_3MON_AVG),
                                        SRP = median(SRP, na.rm=TRUE),
                                        DIN = median(DIN, na.rm=TRUE),
-                                       W_temp = median(W_temp, na.rm=TRUE),
                                        QLD = median(QLD, na.rm=TRUE)))
 
 year.pred <- predict(m2, newdata = new_data_year, type = "terms")
@@ -474,7 +439,6 @@ comboplot_time <- ggplot(year.pdatnorm, aes(x = year, y = DOY, z=Conductivity)) 
   theme(legend.key.width=unit(1.5,"cm")) +
   scale_y_continuous(expand = c(0, 0), breaks = c(1, 91,  182, 274, 335), labels = c("Jan", "Apr", "Jul", "Oct", "Dec")) +
   scale_x_continuous(expand = c(0, 0)) +  # Remove padding on x-axis
-  #scale_y_continuous() +  # Remove padding on y-axis
   xlab("Year") + ylab("DOY") +
   labs(fill=expression(paste("Conductivity (",mu, "S ", cm^-1,")   ")))+
   theme(legend.position = "top")
@@ -486,234 +450,6 @@ ggsave('output/Conductivity change over time.png', comboplot_time, height = 6, w
 
 
 saveRDS(comboplot_time, "time_Conductivity_nolag.rds")  # save the ggplot objec
-
-## ==================================================================================
-## Testing effect (NOT RESPONSE) by time plots SOURCE CODE (Wilk et al. 2018)
-## ==================================================================================
-
-
-df1<- df1%>%
-  select(date, year, nMonth, DOY, Conductivity, SRP, DIN, QLD, W_temp, SOI_3MON_AVG, PDO_3MON_AVG)
-df1<- na.exclude(df1)
-
-df1$date <- as.Date(df1$date)
-
-df1$seasons <- time2season(df1$date,                # Convert dates to seasons
-                          out.fmt = "seasons")
-
-testing1 <- predict(m2, type = 'terms')
-testing <- as.data.frame(testing1)
-
-tosum <- grep("DIN", colnames(testing))
-DINeffect <- rowSums(testing[tosum], na.rm = TRUE)
-testing <- testing[,-tosum]
-testing$DIN <- DINeffect
-
-
-names(testing) <- c("SRP", "W_temp", "QLD", "SOI_PDO", "time", "DIN")
-testing$Date <- df1$date 
-testing$Year <- df1$year
-testing$DOY <- df1$DOY
-testing$Month <- df1$nMonth
-testing$seasons <- df1$seasons
-
-testing$Month<- as.factor(testing$Month)
-testing$Year<- as.factor(testing$Year)
-
-peD <- ggplot(testing, aes(x = Month, y = DIN)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('seasons') +  
-  ylab("DIN effect") + xlab("Month")
-peD
-
-
-##--------SRP--------------##
-
-peS <- ggplot(testing, aes(x = Month, y = SRP)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Month') +  
- ylab("SRP Effect") + xlab("Month")
-peS
-
-
-##--------TEMP--------------##
-
-peT <- ggplot(testing, aes(x = Month, y = W_temp)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-        xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Month') +  
-  ylab("Temp Effect") + xlab("Month")
-peT
-
-
-##--------QLD--------------##
-peQ <- ggplot(testing, aes(x = Month, y = QLD)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-             xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Month') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("QLD Effect") + xlab("Month")
-
-peQ
-
-
-
-
-##--------SOI*PDO--------------##
-## soi 
-pesoi <- ggplot(testing, aes(x = Month, y = SOI_PDO)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('Month') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("SOI*PDO Effect") + xlab("Month")
-
-pesoi
-
-
-
-
-p_allEFF<- plot_grid(  peD, peS, peT, peQ, pesoi, ncol = 2, align = "hv")
-p_allEFF
-
-ggsave('output/Conductivity GAM_partial effects seasonal ALL.png', p_allEFF, height = 12, width  = 12)
-
-
-
-
-
-## Plotting response to interactions of SOI*PDO at different index values
-
-N <- 100
-simSOI <- c(-1, 0.3, 1.1)
-SOIgroup <- factor(rep(c('-1', '0.3', '1.1'), each=100))  # 7*300
-reptimes <- length(simSOI) #3
-preddf <- data.frame(PDO_3MON_AVG = rep(seq(min(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            max(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     SOI_3MON_AVG = rep(simSOI, each = N)) #300
-superN <- nrow(preddf)
-
-
-SOI.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP),
-                            DIN = median(DIN, na.rm=TRUE),
-                            W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-SOI.pred <- predict(m2, newdata = SOI.pdat, type = "link")
-SOI.pdat <- cbind(SOI.pdat, SOI.pred)
-SOI.pdat$SOIgroup <- SOIgroup
-
-names(SOI.pdat)[which(names(SOI.pdat)=='SOI.pred')] <- 'Conductivity'
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(SOI.pdat$PDO_3MON_AVG, SOI.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI.pdat$Conductivity[toofar] <- NA
-
-# backtransform from tweedie distribution
-SOI.pdat$Conductivity<- exp(SOI.pdat$Conductivity)
-
-
-#reorder factors
-SOI.pdat$SOIgroup <- factor(SOI.pdat$SOIgroup, levels = c('-1', '0.3', '1.1'))
-
-SOIplot <- ggplot(SOI.pdat, aes(x = PDO_3MON_AVG, y = Conductivity, group= SOI_3MON_AVG, col=SOIgroup, 
-                                lty=SOIgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_color_manual(name=expression(paste(bold('E')~'      SOI')), values = c("#5e3c99", "#b2abd2", "#e66101"))+
-  scale_linetype_manual(name=expression(paste(bold('E')~'      SOI')), values = c("solid", "solid","longdash")) +
-  xlab('PDO') + ylab('Conductivity')
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-SOIplot
-
-
-## now slices for PDO
-N <- 100
-simPDO <- c(-1.5, 0, 1.6)
-PDOgroup <- factor(rep(c('-1.5', '0', '1.6'), each=100)) 
-
-reptimes <- length(simPDO) #3
-preddf <- data.frame(SOI_3MON_AVG = rep(seq(min(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            max(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     PDO_3MON_AVG = rep(simPDO, each = N)) #300
-superN <- nrow(preddf)
-
-
-PDO.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP),
-                            DIN = median(DIN, na.rm=TRUE),
-                            W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-PDO.pred <- predict(m2, newdata = PDO.pdat, type = "link")
-PDO.pdat <- cbind(PDO.pdat, PDO.pred)
-PDO.pdat$PDOgroup <- PDOgroup
-
-names(PDO.pdat)[which(names(PDO.pdat)=='PDO.pred')] <- 'Conductivity'
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(PDO.pdat$PDO_3MON_AVG, PDO.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-PDO.pdat$Conductivity[toofar] <- NA
-
-# backtransform from tweedie distribution
-PDO.pdat$Conductivity<- exp(PDO.pdat$Conductivity)
-
-#reorder factors
-PDO.pdat$PDOgroup <- factor(PDO.pdat$PDOgroup, levels = c('-1.5', '0', '1.6'))
-
-PDOplot <- ggplot(PDO.pdat, aes(x = SOI_3MON_AVG, y = Conductivity, group= PDO_3MON_AVG, col=PDOgroup, 
-                                lty=PDOgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_color_manual(name=expression(paste(bold('E')~'      PDO')), values = c("#5e3c99", "#b2abd2", "#e66101"))+
-  scale_linetype_manual(name=expression(paste(bold('E')~'      PDO')), values = c("solid", "solid","longdash")) +
-  #scale_colour_brewer(name = "PDO", type = 'qual', palette = 'Dark2', direction=1) +
-  #geom_abline(slope = 0, intercept = meanpH, linetype="dotted") +
-  xlab('SOI') + ylab('Conductivity')
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-PDOplot
-
-
-pdo_all<- plot_grid(PDOplot, SOIplot)
-pdo_all
-
-ggsave('output/PDO SOI separate infl TW Conductivity.png', pdo_all, height = 6, width  = 8)
-
-
 
 ##--------------------------------------------------##
 ## References

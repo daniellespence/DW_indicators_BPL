@@ -65,7 +65,7 @@ clim <- read_csv("data/SOI_PDO data no lag.csv")
 df1<- merge(df, clim, by="date")
 
 ##----------------------------------------------------------------------------##
-## 3. Check annual and seasonal variability
+## 3. Etimate annual and seasonal variability
 ##----------------------------------------------------------------------------##
 
 
@@ -107,14 +107,10 @@ print(summary_stats)
 
 m2 <- gam(Odour ~ s(SRP) +  
              s(DIN)+ 
-             #s(W_temp)+
              s(QLD)+
-            #ti(DOY, QLD, bs = c("cc", "tp"))+ 
              te(PDO_3MON_AVG,SOI_3MON_AVG)+
              te(year, DOY, bs=c('cr', 'cc')),
-             #s(DOY, bs = 'cc')+
-             #s(Year, bs = 're'),
-            knots=list(DOY=c(0, 366.5)),
+             knots=list(DOY=c(0, 366.5)),
            select = TRUE,
            data = df1, method = "REML", family = Gamma(link = "log"))
 
@@ -122,13 +118,12 @@ m2 <- gam(Odour ~ s(SRP) +
 
 saveRDS(m2, file = "modelOdour.rds")
 
- # sink("model_summaryOdour_notemp.txt")
- # summary(m2)
- # sink()
+ sink("model_summaryOdour.txt") # save model summary to text
+ summary(m2)
+ sink()
 
 
-summary(m2) # Deviance explained =75%, REML = 4010, r2 = 0.493, n=861
-# all sig
+summary(m2) 
 
 k.check(m2)# k-index looks good 
 
@@ -160,28 +155,13 @@ layout(1)
 ## 7. Plotting on the response scale/fitted values
 ##----------------------------------------------------------------------------##
 
-# how much does TON vary on an annual basis?
 
-# Group by year and calculate variation metrics
-annual_var <- aggregate(Odour ~ year, data = df1, function(x) {
-  if (all(is.na(x))) return(NA)
-  max(x, na.rm = TRUE) - min(x, na.rm = TRUE)
-})
-
-mean(annual_var$Odour)
-#230
-
-min(df1$Odour)
-max(df1$Odour)
-#The average range in DOC concentration each year is 230 TON
-# the range is 2 to 800 TON
 
 ## ---------- DIN -------------------##
 
 
 new_data_DIN <- with(df1, expand.grid(DIN = seq(min(DIN), max(DIN),length = 200),
                                            SRP = median(SRP, na.rm=TRUE),
-                                           #W_temp = median(W_temp, na.rm=TRUE),
                                            QLD = median(QLD),
                                            SOI_3MON_AVG = median(SOI_3MON_AVG, na.rm=TRUE),
                                            PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
@@ -241,7 +221,6 @@ max(DIN.pdatnorm$Fitted)-min(DIN.pdatnorm$Fitted)
 
 new_data_SRP <- with(df1, expand.grid(SRP = seq(min(SRP, na.rm = TRUE), max(SRP, na.rm = TRUE), length = 200),
                                      DIN = median(DIN),
-                                     #W_temp = median(W_temp, na.rm=TRUE),
                                      QLD = median(QLD),
                                      SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                      PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
@@ -312,7 +291,6 @@ max(SRP.pdatnorm$Fitted)-min(SRP.pdatnorm$Fitted)
 new_data_QLD <- with(df1, expand.grid(QLD = seq(min(QLD), max(QLD), length = 200),
                                       DIN = median(DIN),
                                       SRP = median(SRP, na.rm=TRUE),
-                                      #W_temp = median(W_temp, na.rm=TRUE),
                                       SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                       PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
                                       year = median(year),
@@ -381,7 +359,6 @@ new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_A
                                                PDO_3MON_AVG = seq(min(PDO_3MON_AVG), max(PDO_3MON_AVG), length = 200),
                                                SRP = median(SRP, na.rm =TRUE),
                                                DIN = median(DIN, na.rm=TRUE),
-                                               #W_temp = median(W_temp, na.rm=TRUE),
                                                QLD = median(QLD, na.rm=TRUE),
                                                year = median(year),
                                                DOY = median(DOY)))
@@ -448,7 +425,6 @@ new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200
                                        PDO_3MON_AVG = median(PDO_3MON_AVG),
                                        SRP = median(SRP, na.rm=TRUE),
                                        DIN = median(DIN, na.rm=TRUE),
-                                       #W_temp = median(W_temp, na.rm=TRUE),
                                        QLD = median(QLD, na.rm=TRUE)))
 
 year.pred <- predict(m2, newdata = new_data_year, type = "terms")
@@ -499,327 +475,6 @@ comboplot_time
 
 saveRDS(comboplot_time, "time_Odour_notemp.rds")  # save the ggplot objecT
 
-
-
-### ------------SOI PDO ----------------#
-
-
-N <- 200
-simSOI <- c(-1, 0.3, 1.1)
-SOIgroup <- factor(rep(c('-1', '0.3', '1.1'), each=200))  # 7*300
-reptimes <- length(simSOI) #3
-preddf <- data.frame(PDO_3MON_AVG = rep(seq(min(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            max(df1$PDO_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     SOI_3MON_AVG = rep(simSOI, each = N)) #300
-superN <- nrow(preddf)
-
-
-SOI.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP, na.rm=TRUE),
-                            DIN = median(DIN, na.rm=TRUE),
-                            #W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-SOI.pred <- predict(m2, newdata = SOI.pdat, type = "link")
-SOI.pdat <- cbind(SOI.pdat, SOI.pred)
-SOI.pdat$SOIgroup <- SOIgroup
-
-names(SOI.pdat)[which(names(SOI.pdat)=='SOI.pred')] <- 'Odour'
-
-# backtransform from tweedie distribution
-SOI.pdat$Odour<- exp(SOI.pdat$Odour)
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(SOI.pdat$PDO_3MON_AVG, SOI.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI.pdat$Odour[toofar] <- NA
-
-
-
-#reorder factors
-SOI.pdat$SOIgroup <- factor(SOI.pdat$SOIgroup, levels = c('-1', '0.3', '1.1'))
-
-SOIplot <- ggplot(SOI.pdat, aes(x = PDO_3MON_AVG, y = Odour, group= SOI_3MON_AVG, col=SOIgroup, 
-                                lty=SOIgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_y_continuous(limits=c(50, 300))+
-  scale_color_manual(name=expression(paste(bold('')~'      SOI')), values = c("red", "black", "blue"))+
-  scale_linetype_manual(name=expression(paste(bold('')~'      SOI')), values = c("solid", "solid","longdash")) +
-  xlab('PDO') + ylab('Odour (T.O.N)')+
-  theme(
-    axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) < 0, "blue",
-                                              ifelse(seq(-2.5, 2.5, by = 1) > 0.5, "red", "black")))
-  )
-
-## '#e66101','#fdb863','#b2abd2','#5e3c99' (order red:light:dark)
-
-SOIplot
-
-
-saveRDS(SOIplot, "soi_Odour.rds")  # save the ggplot object
-
-
-## now slices for PDO
-N <- 200
-simPDO <- c(-1.5, 0, 1.6)
-PDOgroup <- factor(rep(c('-1.5', '0', '1.6'), each=200)) 
-
-reptimes <- length(simPDO) #3
-preddf <- data.frame(SOI_3MON_AVG = rep(seq(min(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            max(df1$SOI_3MON_AVG, na.rm=TRUE),
-                                            length = N), times=reptimes),
-                     PDO_3MON_AVG = rep(simPDO, each = N)) #300
-superN <- nrow(preddf)
-
-
-PDO.pdat <- with(df1,
-                 data.frame(PDO_3MON_AVG = rep(preddf$PDO_3MON_AVG), # 300*7
-                            SOI_3MON_AVG = rep(preddf$SOI_3MON_AVG), # 300*7
-                            SRP = median(SRP, na.rm=TRUE),
-                            DIN = median(DIN, na.rm=TRUE),
-                            #W_temp = median(W_temp, na.rm=TRUE),
-                            QLD = median(QLD, na.rm=TRUE),
-                            year = rep(2003),
-                            DOY = median(DOY)))
-
-PDO.pred <- predict(m2, newdata = PDO.pdat, type = "link")
-PDO.pdat <- cbind(PDO.pdat, PDO.pred)
-PDO.pdat$PDOgroup <- PDOgroup
-
-names(PDO.pdat)[which(names(PDO.pdat)=='PDO.pred')] <- 'Odour'
-
-# backtransform from tweedie distribution
-PDO.pdat$Odour<- exp(PDO.pdat$Odour)
-
-
-# need to take away places where PDO*SOI combo has not occurred in the data!!
-toofar <- exclude.too.far(PDO.pdat$PDO_3MON_AVG, PDO.pdat$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-PDO.pdat$Odour[toofar] <- NA
-
-
-#reorder factors
-PDO.pdat$PDOgroup <- factor(PDO.pdat$PDOgroup, levels = c('-1.5', '0', '1.6'))
-
-PDOplot <- ggplot(PDO.pdat, aes(x = SOI_3MON_AVG, y = Odour, group= PDO_3MON_AVG, col=PDOgroup, 
-                                lty=PDOgroup)) +
-  theme_bw(base_size=14) +
-  theme(legend.position='top') +
-  geom_line() +
-  scale_y_continuous(limits=c(50, 300))+
-  scale_color_manual(name=expression(paste(bold('')~'      PDO')), values = c("blue", "black", "red"))+
-  scale_linetype_manual(name=expression(paste(bold('')~'      PDO')), values = c("solid", "solid","longdash")) +
-  xlab('SOI') + ylab('Odour (T.O.N)')+
-  theme(
-    axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) <  -0.5, "blue",
-                                              ifelse(seq(-2.5, 2.5, by = 1) > 0, "red", "black")))
-  )
-
-
-PDOplot
-
-
-saveRDS(PDOplot, "pdo_Odour.rds")  # save the ggplot object
-
-
-pdo_all<- plot_grid(PDOplot, SOIplot)
-pdo_all
-
-ggsave('output/PDO SOI separate infl TW.png', pdo_all, height = 6, width  = 8)
-
-## ---------- W_temp -------------------##
-# 
-# new_data_temp <- with(df1, expand.grid(W_temp = seq(min(W_temp, na.rm = TRUE), max(W_temp, na.rm = TRUE), length = 200),
-#                                      DIN = median(DIN),
-#                                      SRP = median(SRP, na.rm=TRUE),
-#                                      QLD = median(QLD),
-#                                      SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
-#                                      PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
-#                                      year= median(year),
-#                                      DOY = median(DOY)))
-# 
-# temp.pred <- predict(m2, newdata = new_data_temp, type = "terms", se.fit = TRUE)
-# 
-# whichCols <- grep("W_temp", colnames(temp.pred$fit))
-# whichColsSE <- grep("W_temp", colnames(temp.pred$se.fit))
-# new_data_temp <- cbind(new_data_temp, Fitted = temp.pred$fit[, whichCols], 
-#                        se.Fitted = temp.pred$se.fit[, whichColsSE])
-# limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
-# 
-# ## make into original limits
-# new_data_temp <- with(new_data_temp, transform(new_data_temp, Fittedplus = Fitted + se.Fitted))
-# new_data_temp <- with(new_data_temp, transform(new_data_temp, Fittedminus = Fitted - se.Fitted))
-# 
-# shifttemp <- attr(predict(m2, newdata = new_data_temp, type = "iterms"), "constant")
-# temp.pdatnorm <- new_data_temp
-# temp.pdatnorm <- with(temp.pdatnorm, transform(temp.pdatnorm, Fitted = Fitted + shifttemp, 
-#                                                Fittedplus = Fittedplus + shifttemp, 
-#                                                Fittedminus = Fittedminus + shifttemp))
-# 
-# temp.pdatnorm$Fitted<-exp(temp.pdatnorm$Fitted)
-# temp.pdatnorm$Fittedplus<-exp(temp.pdatnorm$Fittedplus)
-# temp.pdatnorm$Fittedminus<-exp(temp.pdatnorm$Fittedminus)
-# 
-# 
-# tempquants <- quantile(df1$W_temp, c(.05,.95), na.rm = TRUE)
-# 
-# tempplot <- ggplot(temp.pdatnorm, aes(x = W_temp, y = Fitted)) +
-#   papertheme +
-#   #scale_y_continuous(limits=c(30, 125))+
-#   annotate("rect", xmin=tempquants[1], xmax=tempquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
-#   geom_line() +
-#   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
-#               alpha = 0.25, fill = '#165459B2') +  
-#   geom_rug(aes(x=W_temp), data = df1, stat = "identity", position = "identity", 
-#            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-#   xlab(expression(paste("Water temperature (" , degree*C,")"))) + ylab("Odour (T.O.N)")
-# 
-# tempplot
-# 
-# 
-# saveRDS(tempplot, "temp_Odour_notemp.rds")  # save the ggplot objec
-# 
-# 
-# # range of control
-# max(temp.pdatnorm$Fitted)-min(temp.pdatnorm$Fitted)
-# # = 29.8
-
-## ==================================================================================
-## Testing effect (NOT RESPONSE) by time plots SOURCE CODE (Wilk et al. 2018)
-## ==================================================================================
-
-
-df1<- df1%>%
-  select(date, year, nMonth, DOY, Odour, SRP, DIN, QLD, W_temp, SOI_3MON_AVG, PDO_3MON_AVG)
-df1<- na.exclude(df1)
-
-df1$date <- as.Date(df1$date)
-
-df1$seasons <- time2season(df1$date,                # Convert dates to seasons
-                          out.fmt = "seasons")
-
-testing1 <- predict(m2, type = 'terms')
-testing <- as.data.frame(testing1)
-
-tosum <- grep("TN", colnames(testing))
-TNeffect <- rowSums(testing[tosum], na.rm = TRUE)
-testing <- testing[,-tosum]
-testing$TN <- TNeffect
-
-
-names(testing) <- c("SRP", "W_temp", "QLD", "SOI_PDO", "time", "TN")
-testing$Date <- df1$date 
-testing$year <- df1$year
-testing$DOY <- df1$DOY
-testing$month <- df1$nMonth
-testing$seasons <- df1$seasons
-
-testing$month<- as.factor(testing$month)
-testing$year<- as.factor(testing$year)
-
-peD <- ggplot(testing, aes(x = month, y = TN)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('seasons') +  
-  ylab("TN effect") + xlab("Month")
-peD
-
-
-##--------SRP--------------##
-
-peS <- ggplot(testing, aes(x = month, y = SRP)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('month') +  
- ylab("SRP Effect") + xlab("Month")
-peS
-
-
-##--------TEMP--------------##
-
-peT <- ggplot(testing, aes(x = month, y = W_temp)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-        xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('month') +  
-  ylab("Temp Effect") + xlab("Month")
-peT
-
-
-##--------QLD--------------##
-peQ <- ggplot(testing, aes(x = month, y = QLD)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-             xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('month') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("QLD Effect") + xlab("Month")
-
-peQ
-
-
-
-
-##--------SOI*PDO--------------##
-## soi 
-pesoi <- ggplot(testing, aes(x = month, y = SOI_PDO)) +
-  annotate("rect", ymin = -0.05, ymax = 0.05, 
-           xmin = -Inf, xmax = Inf, alpha = 0.3, fill = '#165459B2') +
-  geom_boxplot() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=55, hjust=1, vjust=1, face = "bold")) +
-  #facet_wrap('month') +  
-  #geom_text(data = labdatGPP, aes(label = label, x = x, y = y, size = 5), 
-  #         show.legend = FALSE) +
-  ylab("SOI*PDO Effect") + xlab("Month")
-
-pesoi
-
-
-
-
-p_allEFF<- plot_grid(  peD, peS, peT, peQ, pesoi, ncol = 2, align = "hv")
-p_allEFF
-
-ggsave('output/sqrt Odour GAM_partial effects seasonal ALL.png', p_allEFF, height = 12, width  = 12)
-
-
-
-
-## make predictors in the same range as before?
-
-## start with TN
-
-minmax <- function(df, colnames) {
-  allmin <- as.data.frame(do.call(cbind, lapply(df[,colnames], min, na.rm = TRUE)))
-  names(allmin) <- sapply(names(allmin), function(x) paste("min",x, sep = ""))
-  allmax <- as.data.frame(do.call(cbind, lapply(df[,colnames], max, na.rm = TRUE)))
-  names(allmax) <- sapply(names(allmax), function(x) paste("max",x, sep = ""))
-  summ <- as.data.frame(cbind(allmin, allmax))
-    summ
-}
-
-df1<- df%>% select(SRP, TN, QLD, W_temp)
-
-minmaxes <- do.call(rbind, lapply(df1, minmax, colnames = c("TN", "SRP", "QLD", 
-                                                                 "W_temp")))
-rownames(minmaxes) <- NULL
 
 
 
