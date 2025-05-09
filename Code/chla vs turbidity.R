@@ -118,7 +118,7 @@ p1
 ggsave('output/chla vs turbidity.png', p1, height = 6, width  = 8)
 
 
-?cor.te
+# are they correlated?
 cor.test(df1$turb, df1$chla, method = "spearman")
 
 cor.test(df1$turb, df1$chla, method = "kendall")
