@@ -1,9 +1,9 @@
 # DW_indicators_BPL
-R code used for statistical analyses and plots in *Title* (Spence, Painter, Nazemi, Venkiteswaran, Baulch, XXX)
+R code used for statistical analyses and plots in *Climate variability is an important driver of water treatability in a shallow reservoir* (Spence, Painter, Nazemi, Venkiteswaran, Baulch, 2025)
 
 author: "Danielle Spence"
 
-date: "May 2025"
+date: "October 2024"
 
 output:
   pdf_document: default
