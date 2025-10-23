@@ -341,8 +341,8 @@ write.csv(full_df, file="data/bpgamdataCLEAN_DOC.csv", row.names=F)
 
 
 
-full_df %>% filter(is.na(NH3_mg.L)) #64 NAs
-full_df %>% filter(is.na(NO3_mg.L)) #46 NAs
+full_df %>% filter(is.na(NH3_mg.L)) #51 NAs
+full_df %>% filter(is.na(NO3_mg.L)) #41 NAs
 full_df %>% filter(is.na(SRP_ug.L)) #57 NAs
 full_df %>% filter(is.na(DOC)) #114 NAs
 
