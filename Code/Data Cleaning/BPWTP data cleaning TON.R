@@ -1,7 +1,6 @@
 ###############################################################################
 ####### cH.1 GAMs -- data processing ##########
 ####### Danielle Spence ##########
-####### Created 3/30/2021 ########
 ###############################################################################
 ### Clear memory
 
@@ -242,4 +241,5 @@ full_df$SRP_ug.L[full_df$SRP_ug.L == 0] <- (3/2)
 
 
 write.csv(full_df, file="data/bpgamdataCLEAN_TON.csv", row.names=F)
+
 
