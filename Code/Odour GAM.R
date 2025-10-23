@@ -1,4 +1,4 @@
-###############################################################################
+ ###############################################################################
 ####### BPWTP Data -- GAMs ##########
 ####### Danielle Spence ##########
 ####### Created 5/4/2023 ########
@@ -7,8 +7,8 @@
 rm(list = ls())
 
 library(pacman)
-p_load(tidyverse, ggplot2, mgcv, gratia, readr, GGally, dplyr, lubridate,
-       cowplot, tibble,viridis, install = TRUE)
+p_load(tidyverse, ggplot2, mgcv, gratia, readr, GGally, dplyr,  mgcViz, lubridate,
+        cowplot, tibble, install = TRUE)
 
 setwd("C:/Users/danis/OneDrive/R/DW indicators")
 
@@ -18,7 +18,7 @@ papertheme <- theme_bw(base_size=12, base_family = 'Arial')
 ## 1. Read in data 
 ##----------------------------------------------------------------------------##
 
-df <- read_csv("data/bpgamdataCLEAN_Conductivity.csv")
+df <- read_csv("data/bpgamdataCLEAN_TON.csv")
 
 df$Date<- as.Date(df$Date, "%m/%d/%Y")
 
@@ -30,8 +30,7 @@ df <- mutate(df,
              nMonth = as.numeric(format(Date,'%m')),
              week = as.numeric(format(Date, '%W')))%>% 
   filter(year %in% c(1990:2022))
-# 1039 obs
-
+# 1435 obs
 
 ## order the data
 df <- df[with(df, order(Date)),]
@@ -41,24 +40,31 @@ df <- df[with(df, order(Date)),]
 df <- df%>%
   dplyr::rename(
     date = "Date",
-    Conductivity = "Conductivity",
-    NO3 = "NO3_mg.L",
+   Odour = "Odour_TON",
+   NO3 = "NO3_mg.L",
     NH3 = "NH3_mg.L",
     SRP = "SRP_ug.L",
     TP = "TP_ug.L",
     W_temp = "Temp_C",
-    QBP = "combined_05JG004.cms",
+   QBP = "combined_05JG004.cms",
     QLD = "SK05JG006.cms",
     QWS = "RC_IC_cms",
-    orgN = "Org_N_mg.L"
-  )
+    orgN = "Org_N_mg.L")
 
 
-#Remove rows without Conductivity data
-df <- df[complete.cases(df$Conductivity),]
-# 1022 obs
+#Remove rows without Odour data
+df <- df[complete.cases(df$Odour),]
+# 1398 obs
+
+# df$DIN <- with(df, ifelse(
+#   is.na(NH3) & is.na(NO3),
+#   NA,
+#   rowSums(df[, c("NH3", "NO3")], na.rm = TRUE)
+# ))
+
 
 df$DIN <- rowSums(df[,c("NO3", "NH3")], na.rm=TRUE)
+
 
 ## add in PDO and SOI 
 
@@ -66,63 +72,13 @@ clim <- read_csv("data/SOI_PDO data no lag.csv")
 
 df1<- merge(df, clim, by="date")
 
-
-## add TDS data
-
-tds <- read_csv("data/bpgamdataCLEAN_TDS.csv")
-
-# 305 obs
-
-tds$Date<- as.Date(tds$Date, "%m/%d/%Y")
-
-# add in Year and nMonth for numeric month and a proper Date class
-
-
-## order the data
-tds <- tds[with(tds, order(Date)),]
-
-
-# rename for ease of use
-tds <- tds%>%
-  dplyr::rename(
-    date = "Date",
-    NO3 = "NO3_mg.L",
-    NH3 = "NH3_mg.L",
-    SRP = "SRP_ug.L",
-    TP = "TP_ug.L",
-    W_temp = "Temp_C",
-    QBP = "combined_05JG004.cms",
-    QLD = "SK05JG006.cms",
-    QWS = "RC_IC_cms",
-    orgN = "Org_N_mg.L",
-  )
-
-#Remove rows without Chla data
-tds <- tds[complete.cases(tds$TDS),]
-
-tds<- tds %>% select(date, TDS)
-# 284 obs
-
-
-df1<- left_join(df1, tds, by="date")
-
-# Fit linear model
-lm_model <- lm(TDS ~ Conductivity, data = df1)
-summary(lm_model)
-
-
-# Predict TDS where it's missing
-df1 <- df1 %>%
-  mutate(Predicted_TDS = ifelse(is.na(TDS), predict(lm_model, newdata = df1), TDS))
-
-
 ##----------------------------------------------------------------------------##
-## 3. Estimate annual and seasonal variability
+## 3. Etimate annual and seasonal variability
 ##----------------------------------------------------------------------------##
 
 df_clean <- df1 %>%
   ungroup() %>%                    # Remove any previous grouping
-  select(year, Predicted_TDS)    
+  select(year, Odour)
 
 
 library(dplyr)
@@ -130,8 +86,8 @@ library(dplyr)
 df_clean %>%
   group_by(year) %>%
   summarise(
-    mean_year = mean(Predicted_TDS, na.rm = TRUE),
-    seasonal_range = max(Predicted_TDS, na.rm = TRUE) - min(Predicted_TDS, na.rm = TRUE)
+    mean_year = mean(Odour, na.rm = TRUE),
+    seasonal_range = max(Odour, na.rm = TRUE) - min(Odour, na.rm = TRUE)
   ) %>%
   summarise(
     avg_seasonal_range = mean(seasonal_range, na.rm = TRUE),
@@ -140,35 +96,37 @@ df_clean %>%
     between_year_range_pct = (max(mean_year) - min(mean_year)) / mean(mean_year) * 100
   )
 
+
 ##----------------------------------------------------------------------------##
 ## 5. Run the full model (see Fitting script)
 ##----------------------------------------------------------------------------##
 
-
-m2 <- gam(Predicted_TDS ~ s(SRP) +  
+m2 <- gam(Odour ~ s(SRP) +  
              s(DIN)+ 
              s(QLD)+
              te(PDO_3MON_AVG,SOI_3MON_AVG)+
-             te(year, DOY, bs = c("cr", "cc")),
-            knots=list(DOY=c(0, 366.5)),
+             te(year, DOY, bs=c('cr', 'cc')),
+             knots=list(DOY=c(0, 366.5)),
            select = TRUE,
-          data = df1, method = "REML", family = Gamma(link = "log"))
+           data = df1, method = "REML", family = Gamma(link = "log"))
 
 
-saveRDS(m2, file = "modelTDS_notemp.rds")
-sink("model_summaryTDS.txt")
-summary(m2)
-sink()
+
+saveRDS(m2, file = "modelOdour.rds")
+
+ sink("model_summaryOdour.txt") # save model summary to text
+ summary(m2)
+ sink()
 
 
 summary(m2) 
-
 
 k.check(m2)# k-index looks good 
 
 p1<- draw(m2,  residuals = TRUE)& theme_bw() 
 p1
 
+#ggsave('output/Odour GAM 1990.png', p1, height = 10, width  = 10)
 
 ##----------------------------------------------------------------------------##
 ## 6. Assess model fit & autocorrelation
@@ -179,16 +137,16 @@ p2<-appraise(m2, point_col = 'steelblue', point_alpha = 0.5, n_bins = 'fd') &
   theme(plot.tag = element_text(face = 'bold')) & theme_bw()
 p2
 
+saveRDS(p2, "Odour_residuals.rds")
 
-saveRDS(p2, "TDS_residuals.rds")
 
-ggsave('output/predicted TDS GAM residuals no temp.png', p2, height = 10, width  = 10)
+ggsave('output/Odour GAM residuals.png', p2, height = 10, width  = 10)
 
 
 # ii. Check for autocorrelation
 layout(matrix(1:2, ncol = 2))
-acf(resid(m2), lag.max = 36, main = "ACF") 
-pacf(resid(m2), lag.max = 36, main = "pACF")
+acf(resid(m), lag.max = 36, main = "ACF") 
+pacf(resid(m), lag.max = 36, main = "pACF")
 layout(1)
 
 
@@ -201,7 +159,7 @@ layout(1)
 ## ---------- DIN -------------------##
 
 
-new_data_din <- with(df1, expand.grid(DIN = seq(min(DIN), max(DIN),length = 200),
+new_data_DIN <- with(df1, expand.grid(DIN = seq(min(DIN), max(DIN),length = 200),
                                            SRP = median(SRP, na.rm=TRUE),
                                            QLD = median(QLD),
                                            SOI_3MON_AVG = median(SOI_3MON_AVG, na.rm=TRUE),
@@ -209,87 +167,121 @@ new_data_din <- with(df1, expand.grid(DIN = seq(min(DIN), max(DIN),length = 200)
                                            year = median(year),
                                            DOY = median(DOY)))
 
-din.pred <- predict(m2, newdata = new_data_din, type = "terms", se.fit = TRUE)
+DIN.pred <- predict(m2, newdata = new_data_DIN, type = "terms", se.fit = TRUE)
 
-whichCols <- grep("DIN", colnames(din.pred$fit))
-whichColsSE <- grep("DIN", colnames(din.pred$se.fit))
-new_data_din <- cbind(new_data_din, Fitted = din.pred$fit[, whichCols], 
-                           se.Fitted = din.pred$se.fit[, whichColsSE])
+whichCols <- grep("DIN", colnames(DIN.pred$fit))
+whichColsSE <- grep("DIN", colnames(DIN.pred$se.fit))
+new_data_DIN <- cbind(new_data_DIN, Fitted = DIN.pred$fit[, whichCols], 
+                           se.Fitted = DIN.pred$se.fit[, whichColsSE])
 limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
 
 ## make into original limits
-new_data_din <- with(new_data_din, transform(new_data_din, Fittedplus = Fitted + se.Fitted))
-new_data_din <- with(new_data_din, transform(new_data_din, Fittedminus = Fitted - se.Fitted))
+new_data_DIN <- with(new_data_DIN, transform(new_data_DIN, Fittedplus = Fitted + se.Fitted))
+new_data_DIN <- with(new_data_DIN, transform(new_data_DIN, Fittedminus = Fitted - se.Fitted))
 
-shiftdin <- attr(predict(m2, newdata = new_data_din, type = "iterms"), "constant")
-din.pdatnorm <- new_data_din
-din.pdatnorm <- with(din.pdatnorm, transform(din.pdatnorm, Fitted = Fitted + shiftdin, 
-                                                       Fittedplus = Fittedplus + shiftdin, 
-                                                       Fittedminus = Fittedminus + shiftdin))
+shiftDIN <- attr(predict(m2, newdata = new_data_DIN, type = "iterms"), "constant")
+DIN.pdatnorm <- new_data_DIN
+DIN.pdatnorm <- with(DIN.pdatnorm, transform(DIN.pdatnorm, Fitted = Fitted + shiftDIN, 
+                                                       Fittedplus = Fittedplus + shiftDIN, 
+                                                       Fittedminus = Fittedminus + shiftDIN))
 
-din.pdatnorm$Fitted<-exp(din.pdatnorm$Fitted)
-din.pdatnorm$Fittedplus<-exp(din.pdatnorm$Fittedplus)
-din.pdatnorm$Fittedminus<-exp(din.pdatnorm$Fittedminus)
-
-dinquants <- quantile(df1$DIN, c(.05,.95), na.rm = TRUE)
+DIN.pdatnorm$Fitted<-exp(DIN.pdatnorm$Fitted)
+DIN.pdatnorm$Fittedplus<-exp(DIN.pdatnorm$Fittedplus)
+DIN.pdatnorm$Fittedminus<-exp(DIN.pdatnorm$Fittedminus)
 
 
-DINplot <- ggplot(din.pdatnorm, aes(x = DIN, y = Fitted)) +
+DINquants <- quantile(df1$DIN, c(.05,.95), na.rm = TRUE)
+
+DINplot <- ggplot(DIN.pdatnorm, aes(x = DIN, y = Fitted)) +
   papertheme +
-  scale_y_continuous(limits=c(275, 525))+
-  annotate("rect", xmin=dinquants[1], xmax=dinquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
+  scale_y_continuous(limits=c(15, 150))+
+  annotate("rect", xmin=DINquants[1], xmax=DINquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                  
-           hjust = -0.1, vjust = 1.5,          
-           label = "italic(p) == 0.0771", parse = TRUE)+
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
+           label = expression(italic("p")*" = 0.0344*"))+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
   geom_rug(aes(x=DIN), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("DIN"~"("*"mg/L)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("DIN"~"("*"mg/L)"))) + ylab("Odour (T.O.N)")
 
 DINplot
 
 
-saveRDS(DINplot, "DIN_TDS_notemp.rds")
+saveRDS(DINplot, "DIN_Odour_notemp.rds")  # save the ggplot objec
 
+# range of effect
+
+max_idx <- which.max(DIN.pdatnorm$Fitted)
+min_idx <- which.min(DIN.pdatnorm$Fitted)
+range_effect_DIN <- DIN.pdatnorm$Fitted[max_idx] - DIN.pdatnorm$Fitted[min_idx]
+# 15.32
+
+#lower range of CI
+range_lwr <- DIN.pdatnorm$Fittedminus[max_idx] - DIN.pdatnorm$Fittedplus[min_idx]
+range_upr <- DIN.pdatnorm$Fittedplus[max_idx] - DIN.pdatnorm$Fittedminus[min_idx]
+
+# compare to seasonal and interannual variability
+
+# Intra-annual variation (average seasonal swing)
+within_year_var <- df1 %>%
+  group_by(year) %>%
+  summarise(range_within = max(Odour) - min(Odour), .groups = "drop") %>%
+  summarise(avg_within = mean(range_within))
+
+# Interannual variation (range of annual means)
+between_year_var <- df1 %>%
+  group_by(year) %>%
+  summarise(mean_year = mean(Odour), .groups = "drop") %>%
+  summarise(range_between = max(mean_year) - min(mean_year))
+
+
+
+# relative_to_within = 
+range_effect_DIN / within_year_var$avg_within
+
+#0.0666
+
+#relative_to_between = 
+range_effect_DIN / between_year_var$range_between
+#0.0688
 
 ### ---------- SRP -------------------##
 
-new_data_srp <- with(df1, expand.grid(SRP = seq(min(SRP, na.rm = TRUE), max(SRP, na.rm = TRUE), length = 200),
+new_data_SRP <- with(df1, expand.grid(SRP = seq(min(SRP, na.rm = TRUE), max(SRP, na.rm = TRUE), length = 200),
                                      DIN = median(DIN),
                                      QLD = median(QLD),
                                      SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                      PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
-                                     year= median(year),
+                                     year = median(year),
                                      DOY = median(DOY)))
 
 
-SRP.pred <- predict(m2, newdata = new_data_srp, type = "terms", se.fit = TRUE)
-
+SRP.pred <- predict(m2, newdata = new_data_SRP, type = "terms", se.fit = TRUE)
 
 
 
 whichCols <- grep("SRP", colnames(SRP.pred$fit))
 whichColsSE <- grep("SRP", colnames(SRP.pred$se.fit))
-new_data_srp <- cbind(new_data_srp, Fitted = SRP.pred$fit[, whichCols], 
+new_data_SRP <- cbind(new_data_SRP, Fitted = SRP.pred$fit[, whichCols], 
                       se.Fitted = SRP.pred$se.fit[, whichColsSE])
 
 
 limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
 
 ## make into original limits
-new_data_srp <- with(new_data_srp, transform(new_data_srp, Fittedplus = Fitted + se.Fitted))
-new_data_srp <- with(new_data_srp, transform(new_data_srp, Fittedminus = Fitted - se.Fitted))
+new_data_SRP <- with(new_data_SRP, transform(new_data_SRP, Fittedplus = Fitted + se.Fitted))
+new_data_SRP <- with(new_data_SRP, transform(new_data_SRP, Fittedminus = Fitted - se.Fitted))
 
-shiftSRP <- attr(predict(m2, newdata = new_data_srp, type = "iterms"), "constant")
-SRP.pdatnorm <- new_data_srp
+shiftSRP <- attr(predict(m2, newdata = new_data_SRP, type = "iterms"), "constant")
+SRP.pdatnorm <- new_data_SRP
 SRP.pdatnorm <- with(SRP.pdatnorm, transform(SRP.pdatnorm, Fitted = Fitted + shiftSRP, 
                                              Fittedplus = Fittedplus + shiftSRP, 
                                              Fittedminus = Fittedminus + shiftSRP))
 
-# backtransform fitted data..
+# backtransform fitted data...
 SRP.pdatnorm$Fitted<-exp(SRP.pdatnorm$Fitted)
 SRP.pdatnorm$Fittedplus<-exp(SRP.pdatnorm$Fittedplus)
 SRP.pdatnorm$Fittedminus<-exp(SRP.pdatnorm$Fittedminus)
@@ -300,26 +292,45 @@ SRPquants <- quantile(df1$SRP, c(.05,.95), na.rm = TRUE)
 
 SRPplot <- ggplot(SRP.pdatnorm, aes(x = SRP, y = Fitted)) +
   papertheme+
-  scale_y_continuous(limits=c(275, 525))+
+  scale_y_continuous(limits=c(15, 150))+
   annotate("rect", xmin=SRPquants[1], xmax=SRPquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                 
-           hjust = -0.1, vjust = 1.5,         
-           label = "italic(p) == 0.476", parse = TRUE)+
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
+           label = expression(italic("p")*" < 0.0001***"))+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
-   geom_rug(aes(x=SRP), data = df1, stat = "identity", position = "identity", 
+  geom_rug(aes(x=SRP), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("SRP ","(", mu, "g/L)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("SRP ","(", mu, "g/L)"))) + ylab("Odour (T.O.N)")
 
 SRPplot
 
 
-saveRDS(SRPplot, "SRP_TDS_notemp.rds")
+
+saveRDS(SRPplot, "SRP_Odour_notemp.rds")  # save the ggplot objec
 
 
+# range of effect
 
+max_idx <- which.max(SRP.pdatnorm$Fitted)
+min_idx <- which.min(SRP.pdatnorm$Fitted)
+range_effect_SRP <- SRP.pdatnorm$Fitted[max_idx] - SRP.pdatnorm$Fitted[min_idx]
+# 73.3
+
+#lower range of CI
+range_lwr <- SRP.pdatnorm$Fittedminus[max_idx] - SRP.pdatnorm$Fittedplus[min_idx]
+range_upr <- SRP.pdatnorm$Fittedplus[max_idx] - SRP.pdatnorm$Fittedminus[min_idx]
+
+# relative to within year variation= 
+range_effect_SRP / within_year_var$avg_within
+
+#0.319
+
+#relative_to_between year variation = 
+range_effect_SRP / between_year_var$range_between
+#0.329
 
 ## ---------- QLD -------------------##
 
@@ -328,8 +339,9 @@ new_data_QLD <- with(df1, expand.grid(QLD = seq(min(QLD), max(QLD), length = 200
                                       SRP = median(SRP, na.rm=TRUE),
                                       SOI_3MON_AVG = median(W_temp, na.rm=TRUE), 
                                       PDO_3MON_AVG = median(PDO_3MON_AVG, na.rm=TRUE),
-                                      year= median(year),
+                                      year = median(year),
                                       DOY = median(DOY)))
+
 QLD.pred <- predict(m2, newdata = new_data_QLD, type = "terms", se.fit = TRUE)
 
 whichCols <- grep("QLD", colnames(QLD.pred$fit))
@@ -356,72 +368,43 @@ QLD.pdatnorm$Fittedminus<-exp(QLD.pdatnorm$Fittedminus)
 
 QLDquants <- quantile(df1$QLD, c(.05,.95), na.rm = TRUE)
 
-
 QLDplot <- ggplot(QLD.pdatnorm, aes(x = QLD, y = Fitted)) +
   papertheme +
-  scale_y_continuous(limits=c(275, 525))+
+  scale_y_continuous(limits=c(15, 150))+
   annotate("rect", xmin=QLDquants[1], xmax=QLDquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                  
-           hjust = -0.1, vjust = 1.5,          
-           label = expression(italic("p")*" < 0.0001***"))+
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
+           label = expression(italic("p")*" = 0.431"))+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
  geom_rug(aes(x=QLD), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("QLD (",m^3, "/s)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("QLD (",m^3, "/", s,")"))) + ylab("Odour (T.O.N)")
+
 QLDplot
 
 
-saveRDS(QLDplot, "QLD_TDS_notemp.rds")
-
-# range of effect
-
-max_idx <- which.max(QLD.pdatnorm$Fitted)
-min_idx <- which.min(QLD.pdatnorm$Fitted)
-range_effect <- QLD.pdatnorm$Fitted[max_idx] - QLD.pdatnorm$Fitted[min_idx]
-range_effect
-
-#lower range of CI
-range_lwr <- QLD.pdatnorm$Fittedminus[max_idx] - QLD.pdatnorm$Fittedplus[min_idx]
-range_upr <- QLD.pdatnorm$Fittedplus[max_idx] - QLD.pdatnorm$Fittedminus[min_idx]
-
-# compare to seasonal and interannual variability
-
-# Intra-annual variation (average seasonal swing)
-within_year_var <- df1 %>%
-  group_by(year) %>%
-  summarise(range_within = max(Predicted_TDS) - min(Predicted_TDS), .groups = "drop") %>%
-  summarise(avg_within = mean(range_within))
-
-# Interannual variation (range of annual means)
-between_year_var <- df1 %>%
-  group_by(year) %>%
-  summarise(mean_year = mean(Predicted_TDS), .groups = "drop") %>%
-  summarise(range_between = max(mean_year) - min(mean_year))
+saveRDS(QLDplot, "QLD_Odour_notemp.rds")  # save the ggplot objec
 
 
-# relative_to_within = 
-range_effect / within_year_var$avg_within
 
-#0.19
-
-#relative_to_between = 
-range_effect / between_year_var$range_between
-#0.100
+# p_all<- plot_grid(SRPplot,DINplot, tempplot,QLDplot, ncol = 2)
+# p_all
 
 
+#ggsave('output/Odour GAM_Response scale.png', p_all, height = 10, width  = 10)
 
 ## ---------- SOI * PDO -------------------##
 
 
 new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_AVG), max(SOI_3MON_AVG), length = 200),
                                                PDO_3MON_AVG = seq(min(PDO_3MON_AVG), max(PDO_3MON_AVG), length = 200),
-                                               SRP = median(SRP, na.rm=TRUE),
+                                               SRP = median(SRP, na.rm =TRUE),
                                                DIN = median(DIN, na.rm=TRUE),
                                                QLD = median(QLD, na.rm=TRUE),
-                                               year= median(year),
+                                               year = median(year),
                                                DOY = median(DOY)))
 
 SOI_3MON_AVG.pred <- predict(m2, newdata = new_data_SOI_3MON_AVG, type = "terms", se.fit = TRUE)
@@ -429,7 +412,7 @@ SOI_3MON_AVG.pred <- predict(m2, newdata = new_data_SOI_3MON_AVG, type = "terms"
 whichCols <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$fit))
 whichColsSE <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$se.fit))
 new_data_SOI_3MON_AVG <- cbind(new_data_SOI_3MON_AVG, Fitted = SOI_3MON_AVG.pred$fit[, whichCols], 
-                      se.Fitted = SOI_3MON_AVG.pred$se.fit[, whichColsSE])
+                               se.Fitted = SOI_3MON_AVG.pred$se.fit[, whichColsSE])
 
 limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
 
@@ -440,32 +423,32 @@ new_data_SOI_3MON_AVG <- with(new_data_SOI_3MON_AVG, transform(new_data_SOI_3MON
 shiftcomb <- attr(SOI_3MON_AVG.pred, "constant")
 SOI_3MON_AVG.pdatnorm <- new_data_SOI_3MON_AVG
 SOI_3MON_AVG.pdatnorm <- with(SOI_3MON_AVG.pdatnorm, transform(SOI_3MON_AVG.pdatnorm, Fitted = Fitted + shiftcomb, 
-                                             Fittedplus = Fittedplus + shiftcomb, 
-                                             Fittedminus = Fittedminus + shiftcomb))
+                                                               Fittedplus = Fittedplus + shiftcomb, 
+                                                               Fittedminus = Fittedminus + shiftcomb))
 
 toofar <- exclude.too.far(SOI_3MON_AVG.pdatnorm$PDO_3MON_AVG, SOI_3MON_AVG.pdatnorm$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI_3MON_AVG.pdatnorm$TDS <- SOI_3MON_AVG.pdatnorm$Fitted
-SOI_3MON_AVG.pdatnorm$TDS[toofar] <- NA
+SOI_3MON_AVG.pdatnorm$Odour <- SOI_3MON_AVG.pdatnorm$Fitted
+SOI_3MON_AVG.pdatnorm$Odour[toofar] <- NA
 
-SOI_3MON_AVG.pdatnorm$TDS<-exp(SOI_3MON_AVG.pdatnorm$TDS)
+SOI_3MON_AVG.pdatnorm$Odour<-exp(SOI_3MON_AVG.pdatnorm$Odour)
 SOI_3MON_AVG.pdatnorm$Fittedplus<-exp(SOI_3MON_AVG.pdatnorm$Fittedplus)
 SOI_3MON_AVG.pdatnorm$Fittedminus<-exp(SOI_3MON_AVG.pdatnorm$Fittedminus)
 
 
-names(new_data_SOI_3MON_AVG)[which(names(new_data_SOI_3MON_AVG)=='SOI_3MON_AVG.pred')] <- 'TDS'
+names(new_data_SOI_3MON_AVG)[which(names(new_data_SOI_3MON_AVG)=='SOI_3MON_AVG.pred')] <- 'Odour'
 
-comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AVG, z=TDS)) + 
+comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AVG, z=Odour)) + 
   theme_bw(base_family = 'Arial') +
   theme(legend.position='top') +
-  geom_raster(aes(fill=TDS)) + 
+  geom_raster(aes(fill=Odour)) + 
   scale_fill_distiller(palette = "Spectral", direction = -1, na.value='transparent') +
   geom_point(data=df1, aes(x=PDO_3MON_AVG, y=SOI_3MON_AVG, z=NULL)) +
-  geom_contour(colour = "black", binwidth = 15) +
-  scale_x_continuous(expand = c(0, 0)) +  
-  scale_y_continuous(expand = c(0, 0)) +  
+  scale_x_continuous(expand = c(0, 0)) +  # Remove padding on x-axis
+  scale_y_continuous(expand = c(0, 0)) +  # Remove padding on y-axis
+  geom_contour(colour = "black", binwidth = 10) +
   theme(legend.key.width=unit(1,"cm"))+
   xlab("PDO") + ylab("SOI") +
-  labs(fill=expression(paste("TDS (mg/L)")))+
+  labs(fill="Odour (T.O.N)")+
   theme(
     axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) < -0.5, "blue",
                                               ifelse(seq(-2.5, 2.5, by = 1) > 0, "red", "black"))),
@@ -477,43 +460,35 @@ comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AV
 comboplot
 
 
-#ggsave('output/SOI PDO INTERACTION Response scale TDS.png', comboplot, height = 8, width  = 10)
+#ggsave('output/SOI PDO INTERACTION Response scale Odour.png', comboplot, height = 8, width  = 10)
 
 
-saveRDS(comboplot, "SOIPDO_TDS_notemp.rds")
+saveRDS(comboplot, "SOIPDO_Odour.rds")  # save the ggplot objec
 
+# range of effect
 
-# range of control
-max(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)-min(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)
-# = 236.12
-
-min(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE) #289 (for setting axes)
-max(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)# 525
-
-
-# SD
 SOI_3MON_AVG.pdatnorm1<- na.omit(SOI_3MON_AVG.pdatnorm)
 
-max_idx <- which.max(SOI_3MON_AVG.pdatnorm1$TDS)
-min_idx <- which.min(SOI_3MON_AVG.pdatnorm1$TDS)
-range_effect_SOI <- SOI_3MON_AVG.pdatnorm1$TDS[max_idx] - SOI_3MON_AVG.pdatnorm1$TDS[min_idx]
-
+max_idx <- which.max(SOI_3MON_AVG.pdatnorm1$Odour)
+min_idx <- which.min(SOI_3MON_AVG.pdatnorm1$Odour)
+range_effect_SOI <- SOI_3MON_AVG.pdatnorm1$Odour[max_idx] - SOI_3MON_AVG.pdatnorm1$Odour[min_idx]
+# 119.7
 
 #lower range of CI
 range_lwr <- SOI_3MON_AVG.pdatnorm1$Fittedminus[max_idx] - SOI_3MON_AVG.pdatnorm1$Fittedplus[min_idx]
 range_upr <- SOI_3MON_AVG.pdatnorm1$Fittedplus[max_idx] - SOI_3MON_AVG.pdatnorm1$Fittedminus[min_idx]
 
+
 # relative_to_within = 
 range_effect_SOI / within_year_var$avg_within
 
-#1.26
+#0.521
 
 #relative_to_between = 
 range_effect_SOI / between_year_var$range_between
-#0.648
+#0.538
 
-
-##---------------------------- temporal change------------------------------------- ####
+### -------------------------temporal change ------------------------------ ####
 
 
 new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200),
@@ -522,7 +497,6 @@ new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200
                                        PDO_3MON_AVG = median(PDO_3MON_AVG),
                                        SRP = median(SRP, na.rm=TRUE),
                                        DIN = median(DIN, na.rm=TRUE),
-                                       W_temp = median(W_temp, na.rm=TRUE),
                                        QLD = median(QLD, na.rm=TRUE)))
 
 year.pred <- predict(m2, newdata = new_data_year, type = "terms")
@@ -536,41 +510,43 @@ year.pdatnorm <- new_data_year
 year.pdatnorm <- with(year.pdatnorm, transform(year.pdatnorm, Fitted = Fitted + shiftcomb))
 
 toofar <- exclude.too.far(year.pdatnorm$DOY, year.pdatnorm$year, df1$DOY, df1$year, dist=0.1)
-year.pdatnorm$TDS <- year.pdatnorm$Fitted
-year.pdatnorm$TDS[toofar] <- NA
+year.pdatnorm$Odour <- year.pdatnorm$Fitted
+year.pdatnorm$Odour[toofar] <- NA
 
 
-year.pdatnorm$TDS<-exp(year.pdatnorm$TDS)
+year.pdatnorm$Odour<-exp(year.pdatnorm$Odour)
 
 
-names(new_data_year)[which(names(new_data_year)=='year.pred')] <- 'TDS'
+names(new_data_year)[which(names(new_data_year)=='year.pred')] <- 'Odour'
 
-comboplot_time <- ggplot(year.pdatnorm, aes(x = year, y = DOY, z=TDS)) + 
-  theme_bw(base_size=14, base_family = 'Arial') +
+
+
+comboplot_time <- ggplot(year.pdatnorm, aes(x = year, y = DOY, z=Odour)) + 
+  theme_minimal(base_size=14, base_family = 'Arial') +
   theme(legend.position='top') +
-  geom_raster(aes(fill=TDS)) +
+  geom_raster(aes(fill=Odour)) + 
   scale_fill_distiller(palette = "Spectral", direction = -1, na.value='transparent') +
   geom_point(data=df1, aes(x=year, y=DOY, z=NULL)) +
-  geom_contour(colour = "black", binwidth = 40) +
+  geom_contour(colour = "black", binwidth = 25) +
   theme(legend.key.width=unit(1.5,"cm")) +
+   xlab("Year") + ylab("DOY") +
   scale_y_continuous(expand = c(0, 0), breaks = c(1, 91,  182, 274, 335), labels = c("Jan", "Apr", "Jul", "Oct", "Dec")) +
   scale_x_continuous(expand = c(0, 0)) +  # Remove padding on x-axis
-  #scale_y_continuous() +  # Remove padding on y-axis
-  xlab("Year") + ylab("DOY") +
-  labs(fill=expression(paste("TDS (mg/L)")))+
+  labs(fill=expression(paste("Odour (T.O.N)")))+
   theme(legend.position = "top")
+
+
+#ggtitle(expression(paste("Chlorophyll ", italic("a"), " (", mu, "g L"^-1*")")))
 
 
 comboplot_time
 
-#ggsave('output/TDS change over time.png', comboplot_time, height = 6, width  = 8)
+
+#ggsave('output/Odour change over time.png', comboplot_time, height = 6, width  = 8)
 
 
-saveRDS(comboplot_time, "time_TDS_notemp.rds")  # save the ggplot objec
+saveRDS(comboplot_time, "time_Odour_notemp.rds")  # save the ggplot objecT
 
-# range of control
-max(year.pdatnorm$TDS, na.rm = TRUE)-min(year.pdatnorm$TDS, na.rm = TRUE)
-# = 371.6
 
 
 

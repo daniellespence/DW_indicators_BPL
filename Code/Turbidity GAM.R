@@ -1,4 +1,4 @@
-###############################################################################
+ ###############################################################################
 ####### BPWTP Data -- GAMs ##########
 ####### Danielle Spence ##########
 ####### Created 5/4/2023 ########
@@ -8,7 +8,7 @@ rm(list = ls())
 
 library(pacman)
 p_load(tidyverse, ggplot2, mgcv, gratia, readr, GGally, dplyr, lubridate,
-       cowplot, tibble,viridis, install = TRUE)
+        cowplot, tibble,viridis, install = TRUE)
 
 setwd("C:/Users/danis/OneDrive/R/DW indicators")
 
@@ -18,7 +18,7 @@ papertheme <- theme_bw(base_size=12, base_family = 'Arial')
 ## 1. Read in data 
 ##----------------------------------------------------------------------------##
 
-df <- read_csv("data/bpgamdataCLEAN_Conductivity.csv")
+df <- read_csv("data/bpgamdataCLEAN_Turb.csv")
 
 df$Date<- as.Date(df$Date, "%m/%d/%Y")
 
@@ -30,7 +30,7 @@ df <- mutate(df,
              nMonth = as.numeric(format(Date,'%m')),
              week = as.numeric(format(Date, '%W')))%>% 
   filter(year %in% c(1990:2022))
-# 1039 obs
+# 974 obs
 
 
 ## order the data
@@ -41,7 +41,7 @@ df <- df[with(df, order(Date)),]
 df <- df%>%
   dplyr::rename(
     date = "Date",
-    Conductivity = "Conductivity",
+   turb = "Turbidity",
     NO3 = "NO3_mg.L",
     NH3 = "NH3_mg.L",
     SRP = "SRP_ug.L",
@@ -51,14 +51,15 @@ df <- df%>%
     QLD = "SK05JG006.cms",
     QWS = "RC_IC_cms",
     orgN = "Org_N_mg.L"
-  )
+    )
 
 
-#Remove rows without Conductivity data
-df <- df[complete.cases(df$Conductivity),]
-# 1022 obs
+#Remove rows without turb data
+df <- df[complete.cases(df$turb),]
+# 974 obs
 
 df$DIN <- rowSums(df[,c("NO3", "NH3")], na.rm=TRUE)
+
 
 ## add in PDO and SOI 
 
@@ -66,63 +67,13 @@ clim <- read_csv("data/SOI_PDO data no lag.csv")
 
 df1<- merge(df, clim, by="date")
 
-
-## add TDS data
-
-tds <- read_csv("data/bpgamdataCLEAN_TDS.csv")
-
-# 305 obs
-
-tds$Date<- as.Date(tds$Date, "%m/%d/%Y")
-
-# add in Year and nMonth for numeric month and a proper Date class
-
-
-## order the data
-tds <- tds[with(tds, order(Date)),]
-
-
-# rename for ease of use
-tds <- tds%>%
-  dplyr::rename(
-    date = "Date",
-    NO3 = "NO3_mg.L",
-    NH3 = "NH3_mg.L",
-    SRP = "SRP_ug.L",
-    TP = "TP_ug.L",
-    W_temp = "Temp_C",
-    QBP = "combined_05JG004.cms",
-    QLD = "SK05JG006.cms",
-    QWS = "RC_IC_cms",
-    orgN = "Org_N_mg.L",
-  )
-
-#Remove rows without Chla data
-tds <- tds[complete.cases(tds$TDS),]
-
-tds<- tds %>% select(date, TDS)
-# 284 obs
-
-
-df1<- left_join(df1, tds, by="date")
-
-# Fit linear model
-lm_model <- lm(TDS ~ Conductivity, data = df1)
-summary(lm_model)
-
-
-# Predict TDS where it's missing
-df1 <- df1 %>%
-  mutate(Predicted_TDS = ifelse(is.na(TDS), predict(lm_model, newdata = df1), TDS))
-
-
 ##----------------------------------------------------------------------------##
 ## 3. Estimate annual and seasonal variability
 ##----------------------------------------------------------------------------##
 
 df_clean <- df1 %>%
   ungroup() %>%                    # Remove any previous grouping
-  select(year, Predicted_TDS)    
+  select(year, turb)
 
 
 library(dplyr)
@@ -130,8 +81,8 @@ library(dplyr)
 df_clean %>%
   group_by(year) %>%
   summarise(
-    mean_year = mean(Predicted_TDS, na.rm = TRUE),
-    seasonal_range = max(Predicted_TDS, na.rm = TRUE) - min(Predicted_TDS, na.rm = TRUE)
+    mean_year = mean(turb, na.rm = TRUE),
+    seasonal_range = max(turb, na.rm = TRUE) - min(turb, na.rm = TRUE)
   ) %>%
   summarise(
     avg_seasonal_range = mean(seasonal_range, na.rm = TRUE),
@@ -140,35 +91,35 @@ df_clean %>%
     between_year_range_pct = (max(mean_year) - min(mean_year)) / mean(mean_year) * 100
   )
 
+
 ##----------------------------------------------------------------------------##
 ## 5. Run the full model (see Fitting script)
 ##----------------------------------------------------------------------------##
 
 
-m2 <- gam(Predicted_TDS ~ s(SRP) +  
+m2 <- gam(turb ~ s(SRP) +  
              s(DIN)+ 
              s(QLD)+
              te(PDO_3MON_AVG,SOI_3MON_AVG)+
              te(year, DOY, bs = c("cr", "cc")),
             knots=list(DOY=c(0, 366.5)),
            select = TRUE,
-          data = df1, method = "REML", family = Gamma(link = "log"))
+           data = df1, method = "REML", family = Gamma(link = "log"))
 
-
-saveRDS(m2, file = "modelTDS_notemp.rds")
-sink("model_summaryTDS.txt")
+ saveRDS(m2, file = "modelturb.rds")
+ sink("model_summaryturb.txt")
+ summary(m2)
+ sink()
+ 
 summary(m2)
-sink()
-
-
-summary(m2) 
-
+# r sq = 0.514
 
 k.check(m2)# k-index looks good 
 
 p1<- draw(m2,  residuals = TRUE)& theme_bw() 
 p1
 
+#ggsave('output/turb GAM 1995 on TN TP.png', p1, height = 10, width  = 10)
 
 ##----------------------------------------------------------------------------##
 ## 6. Assess model fit & autocorrelation
@@ -179,10 +130,10 @@ p2<-appraise(m2, point_col = 'steelblue', point_alpha = 0.5, n_bins = 'fd') &
   theme(plot.tag = element_text(face = 'bold')) & theme_bw()
 p2
 
+saveRDS(p2, "turb_residuals.rds")
 
-saveRDS(p2, "TDS_residuals.rds")
 
-ggsave('output/predicted TDS GAM residuals no temp.png', p2, height = 10, width  = 10)
+ggsave('output/turb GAM residuals no temp.png', p2, height = 10, width  = 10)
 
 
 # ii. Check for autocorrelation
@@ -195,8 +146,6 @@ layout(1)
 #----------------------------------------------------------------------------##
 ## 7. Plotting on the response scale/fitted values
 ##----------------------------------------------------------------------------##
-
-
 
 ## ---------- DIN -------------------##
 
@@ -233,26 +182,26 @@ din.pdatnorm$Fittedminus<-exp(din.pdatnorm$Fittedminus)
 
 dinquants <- quantile(df1$DIN, c(.05,.95), na.rm = TRUE)
 
-
 DINplot <- ggplot(din.pdatnorm, aes(x = DIN, y = Fitted)) +
   papertheme +
-  scale_y_continuous(limits=c(275, 525))+
+  scale_y_continuous(limits=c(0, 10))+
   annotate("rect", xmin=dinquants[1], xmax=dinquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                  
-           hjust = -0.1, vjust = 1.5,          
-           label = "italic(p) == 0.0771", parse = TRUE)+
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
+           label = "italic(p) == 0.0579", parse = TRUE)+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
   geom_rug(aes(x=DIN), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("DIN"~"("*"mg/L)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("DIN"~"(mg/L)"))) + ylab("Turbidity (NTU)")
 
 DINplot
 
 
-saveRDS(DINplot, "DIN_TDS_notemp.rds")
+saveRDS(DINplot, "DIN_TURB_notemp.rds")
+
 
 
 ### ---------- SRP -------------------##
@@ -300,25 +249,23 @@ SRPquants <- quantile(df1$SRP, c(.05,.95), na.rm = TRUE)
 
 SRPplot <- ggplot(SRP.pdatnorm, aes(x = SRP, y = Fitted)) +
   papertheme+
-  scale_y_continuous(limits=c(275, 525))+
+  scale_y_continuous(limits=c(0, 10))+
   annotate("rect", xmin=SRPquants[1], xmax=SRPquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                 
-           hjust = -0.1, vjust = 1.5,         
-           label = "italic(p) == 0.476", parse = TRUE)+
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
+           label = "italic(p) == 0.0790", parse = TRUE)+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
    geom_rug(aes(x=SRP), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("SRP ","(", mu, "g/L)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("SRP ","(", mu, "g/L)"))) + ylab("Turbidity (NTU)")
 
 SRPplot
 
 
-saveRDS(SRPplot, "SRP_TDS_notemp.rds")
-
-
+saveRDS(SRPplot, "SRP_TURB_notemp.rds")
 
 
 ## ---------- QLD -------------------##
@@ -354,66 +301,76 @@ QLD.pdatnorm$Fitted<-exp(QLD.pdatnorm$Fitted)
 QLD.pdatnorm$Fittedplus<-exp(QLD.pdatnorm$Fittedplus)
 QLD.pdatnorm$Fittedminus<-exp(QLD.pdatnorm$Fittedminus)
 
-QLDquants <- quantile(df1$QLD, c(.05,.95), na.rm = TRUE)
 
+QLDquants <- quantile(df1$QLD, c(.05,.95), na.rm = TRUE)
 
 QLDplot <- ggplot(QLD.pdatnorm, aes(x = QLD, y = Fitted)) +
   papertheme +
-  scale_y_continuous(limits=c(275, 525))+
+  scale_y_continuous(limits=c(0, 10))+
   annotate("rect", xmin=QLDquants[1], xmax=QLDquants[2], ymin=-Inf, ymax=Inf, alpha = 0.1, fill='gray60') +
   annotate("text", 
-           x = -Inf, y = Inf,                  
-           hjust = -0.1, vjust = 1.5,          
+           x = -Inf, y = Inf,                  # Top-left corner
+           hjust = -0.1, vjust = 1.5,          # Adjust alignment to keep text inside plot
            label = expression(italic("p")*" < 0.0001***"))+
   geom_line() +
   geom_ribbon(aes(ymin = Fittedminus, ymax = Fittedplus), 
               alpha = 0.25, fill = '#165459B2') +  
  geom_rug(aes(x=QLD), data = df1, stat = "identity", position = "identity", 
            sides = "b", na.rm = FALSE, show.legend = NA, inherit.aes = FALSE, alpha=0.3) +
-  xlab(expression(paste("QLD (",m^3, "/s)"))) + ylab(expression(paste("TDS (mg/L)")))
+  xlab(expression(paste("QLD (",m^3, "/", s,")"))) + ylab("Turbidity (NTU)")
+
 QLDplot
 
 
-saveRDS(QLDplot, "QLD_TDS_notemp.rds")
+saveRDS(QLDplot, "QLD_TURB_notemp.rds")
 
 # range of effect
 
 max_idx <- which.max(QLD.pdatnorm$Fitted)
 min_idx <- which.min(QLD.pdatnorm$Fitted)
-range_effect <- QLD.pdatnorm$Fitted[max_idx] - QLD.pdatnorm$Fitted[min_idx]
-range_effect
+range_effect_QLD <- QLD.pdatnorm$Fitted[max_idx] - QLD.pdatnorm$Fitted[min_idx]
+# 2.62
 
 #lower range of CI
 range_lwr <- QLD.pdatnorm$Fittedminus[max_idx] - QLD.pdatnorm$Fittedplus[min_idx]
 range_upr <- QLD.pdatnorm$Fittedplus[max_idx] - QLD.pdatnorm$Fittedminus[min_idx]
+
 
 # compare to seasonal and interannual variability
 
 # Intra-annual variation (average seasonal swing)
 within_year_var <- df1 %>%
   group_by(year) %>%
-  summarise(range_within = max(Predicted_TDS) - min(Predicted_TDS), .groups = "drop") %>%
+  summarise(range_within = max(turb) - min(turb), .groups = "drop") %>%
   summarise(avg_within = mean(range_within))
 
 # Interannual variation (range of annual means)
 between_year_var <- df1 %>%
   group_by(year) %>%
-  summarise(mean_year = mean(Predicted_TDS), .groups = "drop") %>%
+  summarise(mean_year = mean(turb), .groups = "drop") %>%
   summarise(range_between = max(mean_year) - min(mean_year))
 
 
 # relative_to_within = 
-range_effect / within_year_var$avg_within
+range_effect_QLD / within_year_var$avg_within
 
-#0.19
+#0.178
 
 #relative_to_between = 
-range_effect / between_year_var$range_between
-#0.100
+range_effect_QLD / between_year_var$range_between
+#0.294
 
+
+
+p_all<- plot_grid(DINplot,SRPplot, tempplot,QLDplot, ncol = 2)
+p_all
+
+
+#ggsave('output/turb GAM_Response scale .png', p_all, height = 10, width  = 10)
 
 
 ## ---------- SOI * PDO -------------------##
+
 
 
 new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_AVG), max(SOI_3MON_AVG), length = 200),
@@ -424,12 +381,13 @@ new_data_SOI_3MON_AVG <- with(df1, expand.grid(SOI_3MON_AVG = seq(min(SOI_3MON_A
                                                year= median(year),
                                                DOY = median(DOY)))
 
+
 SOI_3MON_AVG.pred <- predict(m2, newdata = new_data_SOI_3MON_AVG, type = "terms", se.fit = TRUE)
 
 whichCols <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$fit))
 whichColsSE <- grep("PDO_3MON_AVG,SOI_3MON_AVG", colnames(SOI_3MON_AVG.pred$se.fit))
 new_data_SOI_3MON_AVG <- cbind(new_data_SOI_3MON_AVG, Fitted = SOI_3MON_AVG.pred$fit[, whichCols], 
-                      se.Fitted = SOI_3MON_AVG.pred$se.fit[, whichColsSE])
+                               se.Fitted = SOI_3MON_AVG.pred$se.fit[, whichColsSE])
 
 limits <- aes(ymax = Fitted + se.Fitted, ymin= Fitted - se.Fitted)
 
@@ -440,32 +398,31 @@ new_data_SOI_3MON_AVG <- with(new_data_SOI_3MON_AVG, transform(new_data_SOI_3MON
 shiftcomb <- attr(SOI_3MON_AVG.pred, "constant")
 SOI_3MON_AVG.pdatnorm <- new_data_SOI_3MON_AVG
 SOI_3MON_AVG.pdatnorm <- with(SOI_3MON_AVG.pdatnorm, transform(SOI_3MON_AVG.pdatnorm, Fitted = Fitted + shiftcomb, 
-                                             Fittedplus = Fittedplus + shiftcomb, 
-                                             Fittedminus = Fittedminus + shiftcomb))
+                                                               Fittedplus = Fittedplus + shiftcomb, 
+                                                               Fittedminus = Fittedminus + shiftcomb))
 
 toofar <- exclude.too.far(SOI_3MON_AVG.pdatnorm$PDO_3MON_AVG, SOI_3MON_AVG.pdatnorm$SOI_3MON_AVG, df1$PDO_3MON_AVG, df1$SOI_3MON_AVG, dist=0.1)
-SOI_3MON_AVG.pdatnorm$TDS <- SOI_3MON_AVG.pdatnorm$Fitted
-SOI_3MON_AVG.pdatnorm$TDS[toofar] <- NA
+SOI_3MON_AVG.pdatnorm$turb <- SOI_3MON_AVG.pdatnorm$Fitted
+SOI_3MON_AVG.pdatnorm$turb[toofar] <- NA
 
-SOI_3MON_AVG.pdatnorm$TDS<-exp(SOI_3MON_AVG.pdatnorm$TDS)
+SOI_3MON_AVG.pdatnorm$turb<-exp(SOI_3MON_AVG.pdatnorm$turb)
 SOI_3MON_AVG.pdatnorm$Fittedplus<-exp(SOI_3MON_AVG.pdatnorm$Fittedplus)
 SOI_3MON_AVG.pdatnorm$Fittedminus<-exp(SOI_3MON_AVG.pdatnorm$Fittedminus)
 
+names(new_data_SOI_3MON_AVG)[which(names(new_data_SOI_3MON_AVG)=='SOI_3MON_AVG.pred')] <- 'turb'
 
-names(new_data_SOI_3MON_AVG)[which(names(new_data_SOI_3MON_AVG)=='SOI_3MON_AVG.pred')] <- 'TDS'
-
-comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AVG, z=TDS)) + 
+comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AVG, z=turb)) + 
   theme_bw(base_family = 'Arial') +
   theme(legend.position='top') +
-  geom_raster(aes(fill=TDS)) + 
+  geom_raster(aes(fill=turb)) + 
   scale_fill_distiller(palette = "Spectral", direction = -1, na.value='transparent') +
   geom_point(data=df1, aes(x=PDO_3MON_AVG, y=SOI_3MON_AVG, z=NULL)) +
-  geom_contour(colour = "black", binwidth = 15) +
-  scale_x_continuous(expand = c(0, 0)) +  
-  scale_y_continuous(expand = c(0, 0)) +  
+  geom_contour(colour = "black", binwidth = 0.5) +
+  scale_x_continuous(expand = c(0, 0)) +  # Remove padding on x-axis
+  scale_y_continuous(expand = c(0, 0)) +  # Remove padding on y-axis
   theme(legend.key.width=unit(1,"cm"))+
   xlab("PDO") + ylab("SOI") +
-  labs(fill=expression(paste("TDS (mg/L)")))+
+  labs(fill="Turbidity (NTU)")+
   theme(
     axis.text.x = element_text(color = ifelse(seq(-2.5, 2.5, by = 1) < -0.5, "blue",
                                               ifelse(seq(-2.5, 2.5, by = 1) > 0, "red", "black"))),
@@ -477,41 +434,34 @@ comboplot <- ggplot(SOI_3MON_AVG.pdatnorm, aes(x = PDO_3MON_AVG, y = SOI_3MON_AV
 comboplot
 
 
-#ggsave('output/SOI PDO INTERACTION Response scale TDS.png', comboplot, height = 8, width  = 10)
+#ggsave('output/SOI PDO INTERACTION Response scale turb.png', comboplot, height = 8, width  = 10)
 
 
-saveRDS(comboplot, "SOIPDO_TDS_notemp.rds")
+saveRDS(comboplot, "SOIPDO_TURB_notemp.rds")
 
 
 # range of control
-max(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)-min(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)
-# = 236.12
 
-min(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE) #289 (for setting axes)
-max(SOI_3MON_AVG.pdatnorm$TDS, na.rm = TRUE)# 525
-
-
-# SD
 SOI_3MON_AVG.pdatnorm1<- na.omit(SOI_3MON_AVG.pdatnorm)
 
-max_idx <- which.max(SOI_3MON_AVG.pdatnorm1$TDS)
-min_idx <- which.min(SOI_3MON_AVG.pdatnorm1$TDS)
-range_effect_SOI <- SOI_3MON_AVG.pdatnorm1$TDS[max_idx] - SOI_3MON_AVG.pdatnorm1$TDS[min_idx]
+max_idx <- which.max(SOI_3MON_AVG.pdatnorm1$turb)
+min_idx <- which.min(SOI_3MON_AVG.pdatnorm1$turb)
+range_effect <- SOI_3MON_AVG.pdatnorm1$turb[max_idx] - SOI_3MON_AVG.pdatnorm1$turb[min_idx]
 
 
 #lower range of CI
 range_lwr <- SOI_3MON_AVG.pdatnorm1$Fittedminus[max_idx] - SOI_3MON_AVG.pdatnorm1$Fittedplus[min_idx]
 range_upr <- SOI_3MON_AVG.pdatnorm1$Fittedplus[max_idx] - SOI_3MON_AVG.pdatnorm1$Fittedminus[min_idx]
 
+
 # relative_to_within = 
 range_effect_SOI / within_year_var$avg_within
 
-#1.26
+#1.06
 
 #relative_to_between = 
 range_effect_SOI / between_year_var$range_between
-#0.648
-
+#0.55
 
 ##---------------------------- temporal change------------------------------------- ####
 
@@ -522,7 +472,6 @@ new_data_year <- with(df1, expand.grid(DOY = seq(min(DOY), max(DOY),length = 200
                                        PDO_3MON_AVG = median(PDO_3MON_AVG),
                                        SRP = median(SRP, na.rm=TRUE),
                                        DIN = median(DIN, na.rm=TRUE),
-                                       W_temp = median(W_temp, na.rm=TRUE),
                                        QLD = median(QLD, na.rm=TRUE)))
 
 year.pred <- predict(m2, newdata = new_data_year, type = "terms")
@@ -536,41 +485,36 @@ year.pdatnorm <- new_data_year
 year.pdatnorm <- with(year.pdatnorm, transform(year.pdatnorm, Fitted = Fitted + shiftcomb))
 
 toofar <- exclude.too.far(year.pdatnorm$DOY, year.pdatnorm$year, df1$DOY, df1$year, dist=0.1)
-year.pdatnorm$TDS <- year.pdatnorm$Fitted
-year.pdatnorm$TDS[toofar] <- NA
+year.pdatnorm$TURB <- year.pdatnorm$Fitted
+year.pdatnorm$TURB[toofar] <- NA
 
 
-year.pdatnorm$TDS<-exp(year.pdatnorm$TDS)
+year.pdatnorm$TURB<-exp(year.pdatnorm$TURB)
 
 
-names(new_data_year)[which(names(new_data_year)=='year.pred')] <- 'TDS'
+names(new_data_year)[which(names(new_data_year)=='year.pred')] <- 'TURB'
 
-comboplot_time <- ggplot(year.pdatnorm, aes(x = year, y = DOY, z=TDS)) + 
-  theme_bw(base_size=14, base_family = 'Arial') +
+comboplot_time <- ggplot(year.pdatnorm, aes(x = year, y = DOY, z=TURB)) + 
+  theme_minimal(base_size=14, base_family = 'Arial') +
   theme(legend.position='top') +
-  geom_raster(aes(fill=TDS)) +
+  geom_raster(aes(fill=TURB)) +
   scale_fill_distiller(palette = "Spectral", direction = -1, na.value='transparent') +
   geom_point(data=df1, aes(x=year, y=DOY, z=NULL)) +
-  geom_contour(colour = "black", binwidth = 40) +
-  theme(legend.key.width=unit(1.5,"cm")) +
+  geom_contour(colour = "black", binwidth = 5) +
   scale_y_continuous(expand = c(0, 0), breaks = c(1, 91,  182, 274, 335), labels = c("Jan", "Apr", "Jul", "Oct", "Dec")) +
   scale_x_continuous(expand = c(0, 0)) +  # Remove padding on x-axis
-  #scale_y_continuous() +  # Remove padding on y-axis
+  theme(legend.key.width=unit(1.5,"cm")) +
   xlab("Year") + ylab("DOY") +
-  labs(fill=expression(paste("TDS (mg/L)")))+
+  labs(fill=expression(paste("Turbidity (NTU)")))+
   theme(legend.position = "top")
 
 
 comboplot_time
 
-#ggsave('output/TDS change over time.png', comboplot_time, height = 6, width  = 8)
+#ggsave('output/TURB change over time.png', comboplot_time, height = 6, width  = 8)
 
 
-saveRDS(comboplot_time, "time_TDS_notemp.rds")  # save the ggplot objec
-
-# range of control
-max(year.pdatnorm$TDS, na.rm = TRUE)-min(year.pdatnorm$TDS, na.rm = TRUE)
-# = 371.6
+saveRDS(comboplot_time, "time_TURB.rds")  # save the ggplot object
 
 
 

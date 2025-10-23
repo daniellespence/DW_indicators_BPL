@@ -49,7 +49,7 @@ df <- df[complete.cases(df$QLD),]
 p<-ggplot(df, aes(x=QWS, y=QLD, colour=year))+
   geom_point(size=2)+
   scale_colour_viridis_c(option = "mako", direction = 1, name = "Year") +
-  xlab(expression(paste("Flow from watershed sources (",m^3,  s^-1,")")))+ ylab(expression(paste("Flow from Lake Diefenbaker ( ",m^3,  s^-1,")")))+
+  xlab(expression(paste("Flow from watershed sources (",m^3,  "/s)")))+ ylab(expression(paste("Flow from Lake Diefenbaker ( ",m^3,  "/s)")))+
   theme_bw(base_size = 14)
 p
 ggsave('output/scatterplot QWS QLD 1990.png', p, height = 6, width  = 8)
@@ -139,7 +139,7 @@ max <- ggplot(annual_summary, aes(x = year, y = Max_Volume, fill = Source))+
     values = c("QWS" = "#165459B2", "QLD" = "gray60")
   ) +
   #facet_wrap(~ Season, ncol = 2) +
-  labs(x = 'Year', y = expression(paste("Maximum flow rate (",m^3, s^-1,")")))+
+  labs(x = 'Year', y = expression(paste("Maximum flow rate (",m^3, "/s)")))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_y_continuous(expand = c(0, 0), limits = c(0, max(annual_summary$Max_Volume) * 1.01))
@@ -156,7 +156,7 @@ mean <- ggplot(annual_summary, aes(x = year, y = Average_Volume, fill = Source))
     values = c("QWS" = "#165459B2", "QLD" = "gray60")
   ) +
   #facet_wrap(~ Season, ncol = 2) +
-  labs(x = 'Year', y = expression(paste("Average flow rate (",m^3, s^-1,")")))+
+  labs(x = 'Year', y = expression(paste("Average flow rate (",m^3, "/s)")))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_y_continuous(expand = c(0, 0), limits = c(0, max(annual_summary$Average_Volume) * 1.01))
