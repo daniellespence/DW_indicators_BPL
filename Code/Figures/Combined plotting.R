@@ -8,7 +8,7 @@ rm(list = ls())
 
 library(pacman)
 p_load(tidyverse, ggplot2, mgcv, gratia, readr, GGally, dplyr,  mgcViz, lubridate,
-       cowplot, tibble, patchwork, install = TRUE)
+       cowplot, tibble, patchwork, lehuynh, install = TRUE)
 
 setwd("C:/Users/danis/OneDrive/R/DW indicators")
 
@@ -33,6 +33,7 @@ Odour_DIN <- readRDS("DIN_Odour_notemp.rds")  # load the ggplot object
 #print(Odour_DIN)
 
 
+
 # Turb
 
 TURB_DIN <- readRDS("DIN_TURB_notemp.rds")  # load the ggplot object
@@ -42,16 +43,6 @@ TURB_DIN <- readRDS("DIN_TURB_notemp.rds")  # load the ggplot object
 
 TDS_DIN <- readRDS("DIN_TDS_notemp.rds")  # load the ggplot object
 #print(TDS_DIN)
-
-# 
-# # cond
-# 
-# Conductivity_DIN <- readRDS("DIN_Conductivity_notemp.rds")  # load the ggplot object
-# #print(Conductivity_DIN)
-
-## DIN not significant for TDS 
-
-
 
 
 # p_DIN<- plot_grid(TURB_DIN, Conductivity_DIN, Odour_DIN, DOC_DIN )
@@ -82,56 +73,17 @@ Odour_SRP <- readRDS("SRP_Odour_notemp.rds")  # load the ggplot object
 TURB_SRP <- readRDS("SRP_TURB_notemp.rds")  # load the ggplot object
 #print(TURB_SRP)
 
+# TDS_SRP
 
-# # Conductivity
-# 
-# Conductivity_SRP <- readRDS("SRP_Conductivity_notemp.rds")  # load the ggplot object
-# #print(Conductivity_SRP)
+TDS_SRP <- readRDS("SRP_TDS_notemp.rds")  # load the ggplot object
+#print(TDS_SRP)
 
-# 
+
 # p_SRP<- plot_grid(TURB_SRP, Conductivity_SRP, Odour_SRP, DOC_SRP, align = "hv")
 # p_SRP
 
 
 #ggsave('output/SRP ALL.png', p_SRP, height = 8, width  = 10)
-
-
-# 
-# #####----------------------------- TEMP-----------------------------###########
-# 
-# # DOC
-# 
-# DOC_temp <- readRDS("temp_DOC_notemp.rds")  # load the ggplot object
-# #print(DOC_temp)
-# 
-# # TDS
-# 
-# TDS_temp <- readRDS("temp_TDS_notemp.rds")  # load the ggplot object
-# #print(TDS_temp)
-# 
-# # Odour
-# 
-# Odour_temp <- readRDS("temp_Odour_notemp.rds")  # load the ggplot object
-# #print(Odour_temp)
-# 
-# 
-# # TURB
-# 
-# TURB_temp <- readRDS("temp_TURB_notemp.rds")  # load the ggplot object
-# #print(TURB_temp)
-# 
-# # Conductivity
-# 
-# Conductivity_temp <- readRDS("temp_Conductivity_notemp.rds")  # load the ggplot object
-# #print(Conductivity_temp)
-# 
-# 
-# p_TEMP<- plot_grid(TURB_temp, Conductivity_temp, Odour_temp, DOC_temp, align = "hv" )
-# p_TEMP
-# 
-# 
-# #ggsave('output/TEMP ALL.png', p_TEMP, height = 8, width  = 10)
-# 
 
 
 
@@ -148,19 +100,16 @@ DOC_QLD <- readRDS("QLD_DOC_notemp.rds")  # load the ggplot object
 TDS_QLD <- readRDS("QLD_TDS_notemp.rds")  # load the ggplot object
 #print(TDS_QLD)
 
+# Odour_QLD
 
-# QLD NOT SIGNIFICANT FOR Odour
-
+Odour_QLD <- readRDS("QLD_Odour_notemp.rds")  # load the ggplot object
+#print(TDS_QLD)
 
 # TURB
 
 TURB_QLD <- readRDS("QLD_TURB_notemp.rds")  # load the ggplot object
 #print(TURB_QLD)
 
-# TURB
-
-#Conductivity_QLD <- readRDS("QLD_Conductivity_notemp.rds")  # load the ggplot object
-#print(Conductivity_QLD)
 
 # p_QLD<- plot_grid(TURB_QLD, Conductivity_QLD, DOC_QLD, align = "hv")
 # p_QLD
@@ -170,40 +119,18 @@ TURB_QLD <- readRDS("QLD_TURB_notemp.rds")  # load the ggplot object
 
 
 
-##--- load in insig ----# 
+##--- plot it all together now ----# 
 
-# TDS_SRP
-
-TDS_SRP <- readRDS("SRP_TDS_notemp.rds")  # load the ggplot object
-#print(TDS_SRP)
-
-# Odour_QLD
-
-Odour_QLD <- readRDS("QLD_Odour_notemp.rds")  # load the ggplot object
-#print(TDS_QLD)
-
-
-
-
-p_all<- plot_grid(DOC_QLD, DOC_SRP, DOC_DIN,   
+p_all<- plot_grid(TURB_QLD,TURB_SRP,TURB_DIN,
+                  TDS_QLD,TDS_SRP, TDS_DIN,
                   Odour_QLD, Odour_SRP,Odour_DIN,
-                  TDS_QLD,TDS_SRP, TDS_DIN, 
-                  TURB_QLD,TURB_SRP,TURB_DIN,
+                  DOC_QLD, DOC_SRP, DOC_DIN,
                   align = "hv", nrow= 4, ncol = 3)
 p_all
 
-ggsave('output/DW ALL_indicators preditced TDS same scale.png', p_all, height = 8, width  = 12, dpi = 300)
 
-### with conductivity 
+ggsave_elsevier("output/Figure_3.jpeg", plot = p_all, width = "full_page", height =  190)
 
-p_all<- plot_grid(DOC_DIN, DOC_SRP, DOC_QLD, DOC_temp,  
-                  Odour_DIN,Odour_SRP,Odour_QLD,Odour_temp, 
-                  Conductivity_DIN, Conductivity_SRP,Conductivity_QLD,Conductivity_temp, 
-                  TURB_DIN,TURB_SRP,TURB_QLD,TURB_temp,
-                  align = "hv", nrow= 4, ncol = 4)
-p_all
-
-ggsave('output/DW ALL_indicators Conductivity_notemp.png', p_all, height = 8, width  = 12)
 
 ##### --------------------------SOI_PDO ----------------------------###########
 
@@ -239,8 +166,10 @@ p_SOIPDO <- (TURB_SOIPDO| TDS_SOIPDO ) /
   (Odour_SOIPDO| DOC_SOIPDO)
 p_SOIPDO
 
-ggsave('output/SOIPDO ALL predicted TDS_notemp_colours.png', p_SOIPDO, height = 11, width  = 18)
+#ggsave('output/Figure_4.jpeg', p_SOIPDO, height = 8, width  = 12, dpi = 1000)
 
+
+ggsave_elsevier("output/Figure_4.jpeg", plot = p_SOIPDO, width = "full_page", height =  190)
 
 
 ##### ---------------------------TIME ---------------------------###########
@@ -269,11 +198,6 @@ TURB_time <- readRDS("time_TURB.rds")  # load the ggplot object
 #print(TURB_time)
 
 
-# conductivity
-#Conductivity_time <- readRDS("time_Conductivity_notemp.rds")  # load the ggplot object
-#print(Conductivity_time) 
-
-
 
 p_all<- (TURB_time | TDS_time)/
   (Odour_time | DOC_time)
@@ -281,6 +205,29 @@ p_all<- (TURB_time | TDS_time)/
 p_all
 
 
-ggsave('output/TIME ALL TDS predicted_notemp.png', p_all, height = 10, width  = 14)
+ggsave('output/TIME ALL TDS predicted_notemp.jpeg', p_all, height = 10, width  = 14)
 
 
+##### ---------------------------Model diagnostics ---------------------------###########
+
+## model diagnostics
+TDS_res <- readRDS("TDS_residuals.rds")  # load the ggplot object
+print(TDS_res)
+
+DOC_res <- readRDS("DOC_residuals.rds")  # load the ggplot object
+print(DOC_res)
+
+turb_res <- readRDS("turb_residuals.rds")  # load the ggplot object
+print(turb_res)
+
+Odour_res <- readRDS("Odour_residuals.rds")  # load the ggplot object
+print(Odour_res)
+
+
+
+p_all_res<-plot_grid(DOC_res,  Odour_res,TDS_res,turb_res,
+                     ncol = 2, align = "hv", labels = c("A", "B", "C", "D"), label_size = 16, label_x = 0.01, label_y = 1)
+
+p_all_res
+
+ggsave('output/residuals full timeseries.jpeg', p_all_res, height = 12, width  = 15, dpi = 300)
